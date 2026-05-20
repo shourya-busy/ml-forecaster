@@ -75,6 +75,30 @@ ranking:
 # Replace these with your real Netdata queries.
 metrics_to_forecast:
   queries:
-    cpu:  'avg by (instance) (100 - rate(netdata_cpu_cpu_percentage_average{dimension="idle"}[5m]))'
-    mem:  '100 * (1 - avg by (instance) (netdata_system_ram_MiB_average{dimension="free"} / on(instance) group_left netdata_system_ram_MiB_total))'
-    disk: 'max by (instance) (netdata_disk_space_GiB_percentage{dimension="used"})'
+    # Total CPU utilization (%) per instance.
+    # `netdata_system_cpu_percentage_average` is broken down by `dimension`
+    # (user, system, nice, iowait, irq, softirq, steal, guest, idle, …) and
+    # all dimensions sum to ~100%. Total CPU% = 100 - idle.
+    # Already a gauge in [0, 100], so no rate() is needed.
+    cpu:  '100 - sum by (instance) (netdata_system_cpu_percentage_average{dimension="idle"})'
+
+    # TODO: replace with the right metric names for YOUR Netdata Prometheus
+    # exporter. Run on the lgtm host:
+    #   curl -sG http://<prom>:9090/api/v1/label/__name__/values \
+    #     | jq -r '.data[]' | grep -E 'netdata.*(ram|mem|memory)' | sort
+    # Expected shape: pick a gauge whose dimensions split memory into used /
+    # free / cached / buffers (e.g. netdata_system_ram_MiB_average), then
+    # compute used% as below. Verified pattern:
+    mem:  '100 * sum by (instance) (netdata_system_ram_MiB_average{dimension="used"})
+                / on(instance) group_left
+                sum by (instance) (netdata_system_ram_MiB_average)'
+
+    # TODO: same drill for disk. Run:
+    #   curl -sG http://<prom>:9090/api/v1/label/__name__/values \
+    #     | jq -r '.data[]' | grep -E 'netdata.*disk.*(space|util)' | sort
+    # If you have a pre-percentage gauge use it directly; otherwise compute
+    # used / (used + avail). Verified pattern when the percentage gauge exists:
+    disk: 'max by (instance) (netdata_disk_space_GiB_average{dimension="used"}
+                / on(instance, mount_point) group_left
+                (netdata_disk_space_GiB_average{dimension="used"}
+                 + netdata_disk_space_GiB_average{dimension="avail"})) * 100'

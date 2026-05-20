@@ -5,7 +5,7 @@
 #                     the values of the `instance_label` label become targets.
 targets:
   discovery: promql
-  discovery_query: 'group by (instance) (up{job="netdata"})'
+  discovery_query: 'group by (instance) (up{job="netdata_linux"})'
   instance_label: instance
   static_instances:
     - fake-1
