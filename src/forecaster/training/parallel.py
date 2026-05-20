@@ -1,21 +1,36 @@
 """Per-algorithm parallelism inside a single training job.
 
 A worker picks one (instance, metric, horizon) task off the queue and
-trains all configured algorithms for it concurrently. Each algorithm
-runs in a child process (ProcessPoolExecutor) so a misbehaving model
-can't bring down its siblings.
+trains all configured algorithms for it concurrently using threads.
 
-We deliberately avoid sharing the Forecaster object across processes —
-the child returns lightweight artifacts (scores, forecast arrays,
-pickled bytes) which the parent persists.
+Why threads, not processes? Celery's default `prefork` pool runs each task
+inside a *daemonic* child process, and Python's `multiprocessing` (and by
+extension `ProcessPoolExecutor`) refuses to let a daemonic process spawn
+its own children — you get `AssertionError: daemonic processes are not
+allowed to have children`. Threads have no such restriction.
+
+Trade-offs vs. ProcessPoolExecutor:
+- We lose hard isolation: a C-level segfault in one algo can take down the
+  whole worker process. In practice the libraries we depend on
+  (statsmodels, lightgbm, xgboost, torch) are mature enough that this is
+  rare; if it happens, Celery's master restarts the worker and the failed
+  task is retried.
+- We gain compatibility with Celery's default pool *and* keep parallelism:
+  most algo work is in C extensions that release the GIL (numpy, BLAS,
+  torch, lightgbm, xgboost), so threads still parallelise well.
+
+A worker-process Python exception is still caught here and surfaced as
+`AlgoResult.ok=False`, so a misbehaving model's Python failure can't crash
+the worker.
 """
 
 from __future__ import annotations
 
 import logging
+import pickle
 import time
 import traceback
-from concurrent.futures import ProcessPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -47,29 +62,24 @@ class AlgoResult:
 def _train_one(
     algo: str,
     hyperparams: dict[str, Any],
-    series_pickle: bytes,
+    series: pd.Series,
     horizon_steps: int,
     folds: int,
     holdout_fraction: float,
     alpha: float,
 ) -> AlgoResult:
-    """Train + backtest + forecast a single algorithm. Runs in child proc."""
-    import pickle
-
-    from ..models import build as _build  # re-import in child to register
-
+    """Train + backtest + forecast a single algorithm in a worker thread."""
     t0 = time.perf_counter()
     try:
-        series: pd.Series = pickle.loads(series_pickle)  # noqa: S301 - trusted source
         # 1) Backtest
         avg, per_fold = walk_forward(
             series,
-            factory=lambda: _build(algo, **hyperparams),
+            factory=lambda: build(algo, **hyperparams),
             folds=folds,
             holdout_fraction=holdout_fraction,
         )
         # 2) Refit on full history
-        model = _build(algo, **hyperparams)
+        model = build(algo, **hyperparams)
         model.fit(series)
         point = model.predict(horizon_steps).astype(float)
         lower, upper = model.predict_interval(horizon_steps, alpha=alpha)
@@ -84,7 +94,7 @@ def _train_one(
             if len(series) > tail + 5:
                 train = series.iloc[:-tail]
                 test = series.iloc[-tail:]
-                m = _build(algo, **hyperparams)
+                m = build(algo, **hyperparams)
                 m.fit(train)
                 pred = m.predict(len(test))
                 avg = all_metrics(test.to_numpy(), pred)
@@ -102,7 +112,7 @@ def _train_one(
             artifact_bytes=artifact,
             train_duration_seconds=time.perf_counter() - t0,
         )
-    except Exception as exc:  # noqa: BLE001 - we want to surface but not crash
+    except Exception as exc:  # noqa: BLE001 - surface but never crash siblings
         return AlgoResult(
             algo=algo,
             ok=False,
@@ -122,19 +132,16 @@ def train_all_algos(
     alpha: float,
     max_workers: int,
 ) -> list[AlgoResult]:
-    """Train every configured algorithm in parallel; return per-algo results."""
-    import pickle
-
-    series_pickle = pickle.dumps(series)
+    """Train every configured algorithm in parallel threads; return per-algo results."""
     results: list[AlgoResult] = []
-    # ProcessPool with max_workers=1 still gives us isolation.
-    with ProcessPoolExecutor(max_workers=max(1, max_workers)) as ex:
+    with ThreadPoolExecutor(max_workers=max(1, max_workers),
+                            thread_name_prefix="train") as ex:
         future_to_algo = {
             ex.submit(
                 _train_one,
                 algo,
                 defaults.get(algo, {}),
-                series_pickle,
+                series,
                 horizon_steps,
                 folds,
                 holdout_fraction,

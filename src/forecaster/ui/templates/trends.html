@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+{% block title %}Trends{% endblock %}
+{% block content %}
+<h1>Trends</h1>
+<p class="subtitle">Aggregate prediction trajectory and accuracy drift across all instances for a single metric.</p>
+
+<form class="filterbar" method="get">
+  <label>Metric
+    <select name="metric" onchange="this.form.submit()">
+      {% for m in metrics %}
+      <option value="{{ m }}" {% if m == selected_metric %}selected{% endif %}>{{ m }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <span class="sub" style="align-self: center">horizon: <span class="pill">{{ horizon }}</span></span>
+</form>
+
+<div class="two-col" style="margin-top: 14px">
+  <div class="chart-card">
+    <div class="chart-title">
+      <h3>Mean forecast curve — {{ selected_metric }}</h3>
+      <span class="sub">average across instances at each future timestamp</span>
+    </div>
+    <canvas id="avgCurve"></canvas>
+  </div>
+  <div class="chart-card">
+    <div class="chart-title">
+      <h3>Winner share — {{ selected_metric }}</h3>
+      <span class="sub">historical ranking wins by algorithm</span>
+    </div>
+    <canvas id="winnerShare"></canvas>
+  </div>
+</div>
+
+<div class="chart-card" style="margin-top: 14px">
+  <div class="chart-title">
+    <h3>Accuracy drift — winning model MAE over time</h3>
+    <span class="sub">all completed runs on {{ selected_metric }}, oldest-first</span>
+  </div>
+  <canvas id="driftCurve"></canvas>
+</div>
+
+<script>
+const AVG = {{ avg_curve_json|safe }};
+const DRIFT = {{ drift_curve_json|safe }};
+const WINNER_SHARE = {{ winner_share_json|safe }};
+const DISPLAY_TZ = {{ display_timezone|tojson }};
+
+function fmtTs(iso) {
+  try {
+    return new Intl.DateTimeFormat("en-IN", {
+      timeZone: DISPLAY_TZ,
+      month: "short", day: "2-digit",
+      hour: "2-digit", minute: "2-digit", hour12: false,
+    }).format(new Date(iso));
+  } catch (_) { return iso; }
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  if (AVG.length) {
+    new Chart(document.getElementById("avgCurve"), {
+      type: "line",
+      data: {
+        labels: AVG.map(p => fmtTs(p.ts)),
+        datasets: [{
+          label: "mean forecast",
+          data: AVG.map(p => p.avg),
+          borderColor: "#38bdf8", backgroundColor: "rgba(56,189,248,.1)",
+          fill: true, tension: .2, pointRadius: 0, borderWidth: 2,
+        }],
+      },
+      options: { ...fc.commonChartOptions(), plugins: { legend: { display: false } } },
+    });
+  }
+
+  if (DRIFT.length) {
+    // Group MAE by date so the chart shows daily averages
+    const byDay = {};
+    for (const r of DRIFT) {
+      if (!r.completed_at || r.mae == null) continue;
+      const d = r.completed_at.slice(0, 10);
+      (byDay[d] = byDay[d] || []).push(r.mae);
+    }
+    const days = Object.keys(byDay).sort();
+    new Chart(document.getElementById("driftCurve"), {
+      type: "line",
+      data: {
+        labels: days,
+        datasets: [{
+          label: "median MAE (winning model)",
+          data: days.map(d => {
+            const xs = byDay[d].slice().sort((a, b) => a - b);
+            return xs[Math.floor(xs.length / 2)];
+          }),
+          borderColor: "#a78bfa", backgroundColor: "rgba(167,139,250,.1)",
+          fill: true, tension: .2, pointRadius: 3, borderWidth: 2,
+        }],
+      },
+      options: { ...fc.commonChartOptions("MAE"), plugins: { legend: { display: false } } },
+    });
+  }
+
+  if (WINNER_SHARE.length) {
+    new Chart(document.getElementById("winnerShare"), {
+      type: "doughnut",
+      data: {
+        labels: WINNER_SHARE.map(w => w.algo),
+        datasets: [{
+          data: WINNER_SHARE.map(w => w.wins),
+          backgroundColor: WINNER_SHARE.map(w => fc.colors.forAlgo(w.algo)),
+          borderColor: "#0b1220", borderWidth: 1,
+        }],
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { position: "right", labels: { color: "#cbd5e1" } } },
+      },
+    });
+  }
+});
+</script>
+{% endblock %}

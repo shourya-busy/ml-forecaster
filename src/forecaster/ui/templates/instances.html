@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}Instances{% endblock %}
+{% block content %}
+<h1>Instances</h1>
+<p class="subtitle">Per-server view across all metrics × horizons. Click any row for the full per-server detail.</p>
+
+<form class="filterbar" method="get">
+  <input type="text" name="q" value="{{ filters.q or '' }}" placeholder="filter by instance name…">
+  <button class="btn" type="submit">Apply</button>
+  <a class="btn secondary" href="{{ url_for('ui_instances') }}">Reset</a>
+</form>
+
+<table>
+  <thead>
+    <tr>
+      <th>Instance</th><th>Targets</th>
+      <th>Recent runs</th><th>Failures (24h)</th><th>Worst stability</th><th>Last update</th><th></th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for row in instances %}
+    <tr>
+      <td class="code">{{ row.instance }}</td>
+      <td class="num">{{ row.targets }}</td>
+      <td class="num">
+        <span class="pill good">{{ row.completed or 0 }}</span>
+        <span class="pill warn">{{ row.running or 0 }}</span>
+      </td>
+      <td class="num">
+        {% if (row.failed or 0) > 0 %}<span class="pill bad">{{ row.failed }}</span>{% else %}—{% endif %}
+      </td>
+      <td>
+        {% set worst = (row.stability.values() | list | max) if row.stability else 0 %}
+        {% if worst <= 1 %}<span class="pill good">stable</span>
+        {% elif worst <= 3 %}<span class="pill warn">flapping ({{ worst }})</span>
+        {% else %}<span class="pill bad">unstable ({{ worst }})</span>{% endif %}
+      </td>
+      <td class="code">{{ row.last_run_at | to_local_short }}</td>
+      <td><a href="{{ url_for('ui_instance_detail', instance=row.instance) }}">detail →</a></td>
+    </tr>
+  {% else %}
+    <tr><td colspan="7" class="sub">No instances match the filter.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+<p class="subtitle" style="margin-top:14px">{{ instances|length }} instances shown.</p>
+{% endblock %}

@@ -213,6 +213,11 @@ class Settings(BaseModel):
     log_level: str = "INFO"
     use_cuda: bool = False
 
+    # All UI timestamps render in this timezone. Cron expressions in
+    # `horizons.*.retrain` are also interpreted in this zone. Storage and
+    # JSON API responses stay in UTC (ISO 8601 with offset).
+    display_timezone: str = "Asia/Kolkata"
+
     @field_validator("horizons")
     @classmethod
     def _horizons_not_empty(cls, v: dict[str, HorizonSpec]) -> dict[str, HorizonSpec]:

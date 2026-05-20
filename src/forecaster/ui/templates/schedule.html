@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}Schedule{% endblock %}
+{% block content %}
+<h1>Schedule</h1>
+<p class="subtitle">All cron times are in <span class="code">{{ display_tz }}</span>. Edits take effect within ~60s (the scheduler reconciles automatically).</p>
+
+<h2>Per-horizon retrain cadences</h2>
+{% for h in horizons %}
+<div class="card" style="margin-bottom: 12px">
+  <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px">
+    <div>
+      <strong style="font-size: 15px">{{ h.name }}</strong>
+      <span class="sub">step {{ h.step }} · forecast horizon {{ h.horizon }}</span>
+    </div>
+    <form method="post" action="{{ url_for('ui_schedule_save_horizon') }}" style="display: flex; gap: 8px; align-items: center">
+      <input type="hidden" name="horizon" value="{{ h.name }}">
+      <input type="text" name="retrain" value="{{ h.retrain }}" pattern="[\*\d\,\-\/\s]+" required style="width: 200px; background: var(--panel-2); color: var(--text); border: 1px solid var(--border); padding: 6px 10px; border-radius: 6px; font-family: ui-monospace, monospace">
+      <button class="btn" type="submit">Save</button>
+    </form>
+  </div>
+  {% if h.next_fires %}
+  <div class="sub" style="margin-top: 8px">
+    Next: {% for ts in h.next_fires %}<span class="pill muted">{{ ts | to_local_short }}</span> {% endfor %}
+  </div>
+  {% elif h.error %}
+  <div class="sub" style="margin-top: 8px; color: var(--bad)">cron parse error: {{ h.error }}</div>
+  {% endif %}
+</div>
+{% endfor %}
+
+<h2>Upcoming runs (next 30)</h2>
+<table>
+  <thead>
+    <tr><th>When ({{ display_tz }})</th><th>Type</th><th>Horizon</th><th>Target</th><th>Cron</th></tr>
+  </thead>
+  <tbody>
+  {% for r in upcoming %}
+    <tr>
+      <td class="code">{{ r.when | to_local_short }}</td>
+      <td>
+        {% if r.type == 'fan-out' %}<span class="pill">fan-out</span>
+        {% else %}<span class="pill muted">per-target</span>{% endif %}
+      </td>
+      <td>{{ r.horizon }}</td>
+      <td class="code">{{ r.target }}</td>
+      <td class="code">{{ r.cron }}</td>
+    </tr>
+  {% else %}
+    <tr><td colspan="5" class="sub">No upcoming runs scheduled. Did the scheduler service start?</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+
+<h2>Cron syntax quick reference</h2>
+<table>
+  <thead><tr><th>Expression</th><th>Meaning</th></tr></thead>
+  <tbody>
+    <tr><td class="code">*/15 * * * *</td><td>every 15 minutes</td></tr>
+    <tr><td class="code">0 * * * *</td><td>at minute 0 of every hour</td></tr>
+    <tr><td class="code">0 2 * * *</td><td>daily at 02:00 {{ display_tz }}</td></tr>
+    <tr><td class="code">30 9 * * 1-5</td><td>09:30 Mon–Fri</td></tr>
+    <tr><td class="code">0 */6 * * *</td><td>every 6 hours on the hour</td></tr>
+  </tbody>
+</table>
+{% endblock %}

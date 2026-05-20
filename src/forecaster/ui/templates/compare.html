@@ -1,0 +1,141 @@
+{% extends "base.html" %}
+{% block title %}Compare targets{% endblock %}
+{% block content %}
+<h1>Compare two targets</h1>
+<p class="subtitle">Pick any two (instance × metric × horizon) tuples and overlay their forecasts + MAE history on the same axes.</p>
+
+<form class="filterbar" method="get">
+  <label>A
+    <select name="a">
+      <option value="">— pick —</option>
+      {% for o in options %}
+      <option value="{{ o.key }}" {% if a_key == o.key %}selected{% endif %}>{{ o.label }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>B
+    <select name="b">
+      <option value="">— pick —</option>
+      {% for o in options %}
+      <option value="{{ o.key }}" {% if b_key == o.key %}selected{% endif %}>{{ o.label }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <button class="btn" type="submit">Compare</button>
+</form>
+
+{% if a or b %}
+<div class="two-col">
+  <div class="chart-card">
+    <div class="chart-title"><h3>Forecast (best model)</h3>
+      <span class="sub">{{ a.label if a else '—' }} <span style="color: var(--accent)">●</span> · {{ b.label if b else '—' }} <span style="color: var(--accent-2)">●</span></span>
+    </div>
+    <canvas id="forecastCmp"></canvas>
+  </div>
+  <div class="chart-card">
+    <div class="chart-title"><h3>MAE over time</h3></div>
+    <canvas id="maeCmp"></canvas>
+  </div>
+</div>
+
+<h2>Side-by-side summary</h2>
+<table>
+  <thead><tr><th></th><th>A</th><th>B</th></tr></thead>
+  <tbody>
+    <tr><td>Target</td><td>{{ a.label if a else '—' }}</td><td>{{ b.label if b else '—' }}</td></tr>
+    <tr><td>Current winner</td>
+        <td><span class="pill good">{{ a.winner if a else '—' }}</span></td>
+        <td><span class="pill good">{{ b.winner if b else '—' }}</span></td></tr>
+    <tr><td>Forecast points</td>
+        <td class="num">{{ a.forecast|length if a else 0 }}</td>
+        <td class="num">{{ b.forecast|length if b else 0 }}</td></tr>
+    <tr><td>MAE samples</td>
+        <td class="num">{{ a.score_history|length if a else 0 }}</td>
+        <td class="num">{{ b.score_history|length if b else 0 }}</td></tr>
+  </tbody>
+</table>
+
+<script>
+const A = {{ a_json|safe }};
+const B = {{ b_json|safe }};
+const DISPLAY_TZ = {{ display_timezone|tojson }};
+
+function fmtTs(iso) {
+  try {
+    return new Intl.DateTimeFormat("en-IN", {
+      timeZone: DISPLAY_TZ,
+      month: "short", day: "2-digit",
+      hour: "2-digit", minute: "2-digit", hour12: false,
+    }).format(new Date(iso));
+  } catch (_) { return iso; }
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  // Forecast overlay (point only — bands hidden to keep it readable)
+  const fcCtx = document.getElementById("forecastCmp");
+  if (fcCtx) {
+    const allTs = [...new Set([
+      ...((A && A.forecast) || []).map(p => p.ts),
+      ...((B && B.forecast) || []).map(p => p.ts),
+    ])].sort();
+    new Chart(fcCtx, {
+      type: "line",
+      data: {
+        labels: allTs.map(fmtTs),
+        datasets: [
+          A && {
+            label: A.label,
+            data: allTs.map(t => { const p = A.forecast.find(x => x.ts === t); return p ? p.point : null; }),
+            borderColor: "#38bdf8", backgroundColor: "transparent",
+            spanGaps: true, tension: .2, pointRadius: 0, borderWidth: 2,
+          },
+          B && {
+            label: B.label,
+            data: allTs.map(t => { const p = B.forecast.find(x => x.ts === t); return p ? p.point : null; }),
+            borderColor: "#a78bfa", backgroundColor: "transparent",
+            spanGaps: true, tension: .2, pointRadius: 0, borderWidth: 2,
+          },
+        ].filter(Boolean),
+      },
+      options: fc.commonChartOptions(),
+    });
+  }
+
+  // MAE overlay
+  const maeCtx = document.getElementById("maeCmp");
+  if (maeCtx) {
+    const aHist = (A && A.score_history) || [];
+    const bHist = (B && B.score_history) || [];
+    new Chart(maeCtx, {
+      type: "line",
+      data: {
+        datasets: [
+          A && {
+            label: A.label,
+            data: aHist.map(r => ({ x: r.completed_at, y: r.value })),
+            borderColor: "#38bdf8", backgroundColor: "transparent",
+            tension: .2, pointRadius: 3, borderWidth: 2,
+          },
+          B && {
+            label: B.label,
+            data: bHist.map(r => ({ x: r.completed_at, y: r.value })),
+            borderColor: "#a78bfa", backgroundColor: "transparent",
+            tension: .2, pointRadius: 3, borderWidth: 2,
+          },
+        ].filter(Boolean),
+      },
+      options: {
+        ...fc.commonChartOptions("MAE"),
+        scales: {
+          x: { type: "category", ticks: { color: "#94a3b8", callback: function(v, i){ try { return fmtTs(this.getLabelForValue(v)); } catch(_) { return v;} } }, grid: { color: "rgba(255,255,255,.05)" } },
+          y: { ticks: { color: "#94a3b8" }, grid: { color: "rgba(255,255,255,.05)" }, title: { display: true, text: "MAE", color: "#94a3b8" } },
+        },
+      },
+    });
+  }
+});
+</script>
+{% else %}
+<p class="sub" style="margin-top: 20px">Pick A and B from the dropdowns to see the comparison.</p>
+{% endif %}
+{% endblock %}

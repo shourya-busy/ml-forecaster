@@ -50,7 +50,7 @@
         {% elif r.unique_winners_recent <= 3 %}<span class="pill warn">flapping ({{ r.unique_winners_recent }})</span>
         {% else %}<span class="pill bad">unstable ({{ r.unique_winners_recent }})</span>{% endif %}
       </td>
-      <td class="code">{{ r.winner_since or '—' }}</td>
+      <td class="code">{{ r.winner_since | to_local_short }}</td>
       <td><a href="{{ url_for('ui_target_detail', instance=r.instance, metric=r.metric, horizon=r.horizon) }}">detail →</a></td>
     </tr>
   {% else %}

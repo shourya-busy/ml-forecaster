@@ -14,7 +14,16 @@ from sqlalchemy import create_engine, func, select
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
-from .models import Base, Forecast, ModelArtifact, Ranking, RunMetric, TrainingRun
+from .models import (
+    Base,
+    Forecast,
+    ModelArtifact,
+    Ranking,
+    RunMetric,
+    SettingsOverride,
+    TargetOverride,
+    TrainingRun,
+)
 
 
 class RegistryRepo:
@@ -527,6 +536,170 @@ class RegistryRepo:
             ],
         }
 
+    def instance_summary(self, recent_window: int = 10) -> list[dict[str, Any]]:
+        """One row per instance with per-(metric, horizon) status grid.
+
+        Output shape per instance:
+            {
+              "instance": "fake-1",
+              "targets":  N,                # distinct (metric, horizon) seen
+              "completed": N, "failed": N, "running": N,  # recent run statuses
+              "last_run_at": <iso str>,
+              "winners":     {"cpu/medium": "lstm", ...},
+              "stability":   {"cpu/medium": 1, ...},   # unique_winners_recent
+            }
+        """
+        summary_rows = self.winners_summary(recent_window=recent_window)
+        per_inst: dict[str, dict[str, Any]] = {}
+        for row in summary_rows:
+            inst = row["instance"]
+            bucket = per_inst.setdefault(inst, {
+                "instance": inst,
+                "winners": {},
+                "stability": {},
+                "last_run_at": None,
+                "targets": 0,
+            })
+            key = f"{row['metric']}/{row['horizon']}"
+            bucket["winners"][key] = row.get("current_winner")
+            bucket["stability"][key] = row.get("unique_winners_recent", 0)
+            bucket["targets"] += 1
+            ts = row.get("winner_since")
+            if ts and (bucket["last_run_at"] is None or ts > bucket["last_run_at"]):
+                bucket["last_run_at"] = ts
+
+        # Recent run status counts per instance (last 50 runs / instance)
+        with self.session() as s:
+            recent_runs = list(s.scalars(
+                select(TrainingRun)
+                .order_by(TrainingRun.started_at.desc())
+                .limit(2000)
+            ))
+        for r in recent_runs:
+            bucket = per_inst.setdefault(r.instance, {
+                "instance": r.instance,
+                "winners": {},
+                "stability": {},
+                "last_run_at": None,
+                "targets": 0,
+            })
+            bucket.setdefault("completed", 0)
+            bucket.setdefault("failed", 0)
+            bucket.setdefault("running", 0)
+            if r.status == "completed":
+                bucket["completed"] += 1
+            elif r.status == "failed":
+                bucket["failed"] += 1
+            elif r.status in ("pending", "running"):
+                bucket["running"] += 1
+
+        out = sorted(per_inst.values(), key=lambda x: x["instance"])
+        return out
+
+    def instance_detail(self, instance: str, recent_window: int = 10, run_limit: int = 50) -> dict[str, Any] | None:
+        """Everything to render /ui/instances/{instance}."""
+        full = self.winners_summary(recent_window=recent_window)
+        rows = [r for r in full if r["instance"] == instance]
+        if not rows:
+            # Maybe the instance exists in runs but never produced a ranking
+            with self.session() as s:
+                any_run = s.scalar(
+                    select(TrainingRun).where(TrainingRun.instance == instance).limit(1)
+                )
+            if not any_run:
+                return None
+        with self.session() as s:
+            recent = list(s.scalars(
+                select(TrainingRun)
+                .where(TrainingRun.instance == instance)
+                .order_by(TrainingRun.started_at.desc())
+                .limit(run_limit)
+            ))
+        return {
+            "instance": instance,
+            "targets": rows,
+            "recent_runs": [
+                {
+                    "id": r.id, "metric": r.metric, "horizon": r.horizon,
+                    "status": r.status,
+                    "started_at": r.started_at.isoformat() if r.started_at else None,
+                    "completed_at": r.completed_at.isoformat() if r.completed_at else None,
+                    "duration_seconds": r.duration_seconds,
+                    "error": r.error,
+                }
+                for r in recent
+            ],
+        }
+
+    def runs_filtered(
+        self,
+        *,
+        instance: str | None = None,
+        metric: str | None = None,
+        horizon: str | None = None,
+        status: str | None = None,
+        since: datetime | None = None,
+        until: datetime | None = None,
+        sort: str = "started_at",
+        direction: str = "desc",
+        limit: int = 200,
+    ) -> list[TrainingRun]:
+        """Like list_runs but with date range + sortable columns."""
+        with self.session() as s:
+            q = select(TrainingRun)
+            if instance:
+                q = q.where(TrainingRun.instance.ilike(f"%{instance}%"))
+            if metric:
+                q = q.where(TrainingRun.metric == metric)
+            if horizon:
+                q = q.where(TrainingRun.horizon == horizon)
+            if status:
+                q = q.where(TrainingRun.status == status)
+            if since:
+                q = q.where(TrainingRun.started_at >= since)
+            if until:
+                q = q.where(TrainingRun.started_at <= until)
+            col = {
+                "id": TrainingRun.id,
+                "instance": TrainingRun.instance,
+                "metric": TrainingRun.metric,
+                "horizon": TrainingRun.horizon,
+                "status": TrainingRun.status,
+                "started_at": TrainingRun.started_at,
+                "completed_at": TrainingRun.completed_at,
+                "duration_seconds": TrainingRun.duration_seconds,
+            }.get(sort, TrainingRun.started_at)
+            q = q.order_by(col.desc() if direction == "desc" else col.asc()).limit(limit)
+            return list(s.scalars(q))
+
+    def error_groups(self, hours: int = 24, limit: int = 200) -> list[dict[str, Any]]:
+        """Group failed-run errors by their first-line signature for triage."""
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
+        with self.session() as s:
+            rows = list(s.scalars(
+                select(TrainingRun)
+                .where(TrainingRun.status == "failed")
+                .where(TrainingRun.started_at >= cutoff)
+                .order_by(TrainingRun.started_at.desc())
+                .limit(limit)
+            ))
+        groups: dict[str, dict[str, Any]] = {}
+        for r in rows:
+            sig = (r.error or "unknown").split("\n", 1)[0][:160]
+            g = groups.setdefault(sig, {
+                "signature": sig, "count": 0,
+                "first_seen": None, "last_seen": None,
+                "sample_instances": [],
+            })
+            g["count"] += 1
+            ts = r.started_at.isoformat() if r.started_at else None
+            if ts:
+                g["last_seen"] = max(g["last_seen"] or "", ts)
+                g["first_seen"] = min(g["first_seen"] or "ZZZ", ts)
+            if r.instance not in g["sample_instances"] and len(g["sample_instances"]) < 5:
+                g["sample_instances"].append(r.instance)
+        return sorted(groups.values(), key=lambda x: -x["count"])
+
     def attention_targets(self, recent_window: int = 10, stale_after_hours: int = 24) -> list[dict[str, Any]]:
         """Targets that warrant a human look: flapping, recently failed, or stale."""
         now = datetime.now(timezone.utc)
@@ -575,3 +748,92 @@ class RegistryRepo:
             })
             seen.add(key)
         return out
+
+    # ----- settings overrides (UI-managed config) -----
+
+    def get_all_settings_overrides(self) -> dict[str, Any]:
+        """Return the entire overrides table as a flat {dotted_key: value} dict."""
+        with self.session() as s:
+            rows = list(s.scalars(select(SettingsOverride)))
+        return {r.key: r.value for r in rows}
+
+    def set_settings_override(self, key: str, value: Any, updated_by: str | None = None) -> None:
+        with self.session() as s:
+            existing = s.get(SettingsOverride, key)
+            if existing:
+                existing.value = value
+                existing.updated_at = datetime.now(timezone.utc)
+                existing.updated_by = updated_by
+            else:
+                s.add(SettingsOverride(key=key, value=value, updated_by=updated_by))
+
+    def delete_settings_override(self, key: str) -> None:
+        with self.session() as s:
+            row = s.get(SettingsOverride, key)
+            if row:
+                s.delete(row)
+
+    # ----- target overrides (per-target enable + cron) -----
+
+    def get_target_overrides(self) -> list[dict[str, Any]]:
+        with self.session() as s:
+            rows = list(s.scalars(select(TargetOverride)))
+        return [
+            {
+                "instance": r.instance, "metric": r.metric, "horizon": r.horizon,
+                "enabled": r.enabled, "schedule_cron": r.schedule_cron,
+                "note": r.note,
+                "updated_at": r.updated_at.isoformat() if r.updated_at else None,
+                "updated_by": r.updated_by,
+            }
+            for r in rows
+        ]
+
+    def get_target_overrides_map(self) -> dict[tuple[str, str, str], dict[str, Any]]:
+        """Returns {(instance, metric, horizon): {enabled, schedule_cron, ...}}."""
+        return {
+            (r["instance"], r["metric"], r["horizon"]): r
+            for r in self.get_target_overrides()
+        }
+
+    def upsert_target_override(
+        self,
+        *,
+        instance: str,
+        metric: str,
+        horizon: str,
+        enabled: bool | None = None,
+        schedule_cron: str | None = None,
+        note: str | None = None,
+        updated_by: str | None = None,
+    ) -> None:
+        with self.session() as s:
+            row = s.get(TargetOverride, (instance, metric, horizon))
+            if row is None:
+                row = TargetOverride(
+                    instance=instance, metric=metric, horizon=horizon,
+                    enabled=True if enabled is None else enabled,
+                    schedule_cron=schedule_cron,
+                    note=note,
+                    updated_by=updated_by,
+                )
+                s.add(row)
+            else:
+                if enabled is not None:
+                    row.enabled = enabled
+                row.schedule_cron = schedule_cron
+                row.note = note
+                row.updated_at = datetime.now(timezone.utc)
+                row.updated_by = updated_by
+
+    def delete_target_override(self, instance: str, metric: str, horizon: str) -> None:
+        with self.session() as s:
+            row = s.get(TargetOverride, (instance, metric, horizon))
+            if row:
+                s.delete(row)
+
+    def is_target_enabled(self, instance: str, metric: str, horizon: str) -> bool:
+        """Default-on: a target without an override is enabled."""
+        with self.session() as s:
+            row = s.get(TargetOverride, (instance, metric, horizon))
+        return True if row is None else bool(row.enabled)

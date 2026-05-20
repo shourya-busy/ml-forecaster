@@ -25,6 +25,7 @@ dependencies = [
     "celery[redis]>=5.3",
     "apscheduler>=3.10",
     "redis>=5.0",
+    "croniter>=2.0",       # next-fires preview for the Schedule UI
 
     # Data + numerics
     "numpy>=1.26",

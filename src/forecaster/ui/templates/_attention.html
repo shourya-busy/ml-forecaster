@@ -16,7 +16,7 @@
       </td>
       <td>{% if row.current_winner %}<span class="pill">{{ row.current_winner }}</span>{% else %}—{% endif %}</td>
       <td class="num">{{ row.unique_winners_recent }}</td>
-      <td class="code">{{ row.last_completed_at or '—' }}</td>
+      <td class="code">{{ row.last_completed_at | to_local_short }}</td>
       <td><a href="{{ url_for('ui_target_detail', instance=row.instance, metric=row.metric, horizon=row.horizon) }}">inspect →</a></td>
     </tr>
   {% else %}

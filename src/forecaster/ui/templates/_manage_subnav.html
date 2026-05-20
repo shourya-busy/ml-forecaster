@@ -1,0 +1,6 @@
+<nav class="filterbar" style="margin-bottom: 16px">
+  <a class="btn {% if subnav != 'targets' %}secondary{% endif %}" href="{{ url_for('ui_manage_targets') }}">Targets</a>
+  <a class="btn {% if subnav != 'metrics' %}secondary{% endif %}" href="{{ url_for('ui_manage_metrics') }}">Metrics</a>
+  <a class="btn {% if subnav != 'training' %}secondary{% endif %}" href="{{ url_for('ui_manage_training') }}">Training</a>
+  <span class="sub" style="margin-left: auto; align-self: center">edits write to the database and take effect within ~60s</span>
+</nav>

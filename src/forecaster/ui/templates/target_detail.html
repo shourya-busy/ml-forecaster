@@ -6,7 +6,7 @@
   Current winner:
   {% if summary and summary.current_winner %}
     <span class="pill">{{ summary.current_winner }}</span>
-    since <span class="code">{{ summary.winner_since }}</span>
+    since <span class="code">{{ summary.winner_since | to_local_short }}</span>
     · stability:
     {% if summary.unique_winners_recent <= 1 %}<span class="pill good">stable</span>
     {% elif summary.unique_winners_recent <= 3 %}<span class="pill warn">flapping</span>
@@ -83,6 +83,18 @@ const RANKING_DATA    = {{ ranking_json|safe }};
 const WINNER_HISTORY  = {{ winner_history_json|safe }};
 const SCORE_HISTORY   = {{ score_history_json|safe }};
 const ALGOS_HISTORY   = {{ algos_history_json|safe }};
+const DISPLAY_TZ      = {{ display_timezone | tojson }};
+
+function fmtTs(iso) {
+  try {
+    return new Intl.DateTimeFormat("en-IN", {
+      timeZone: DISPLAY_TZ,
+      year: "numeric", month: "short", day: "2-digit",
+      hour: "2-digit", minute: "2-digit", second: "2-digit",
+      hour12: false,
+    }).format(new Date(iso));
+  } catch (_) { return iso; }
+}
 
 document.addEventListener("DOMContentLoaded", () => {
   drawForecast();
@@ -94,7 +106,7 @@ document.addEventListener("DOMContentLoaded", () => {
 function drawForecast() {
   const ctx = document.getElementById("forecastChart");
   if (!ctx || !FORECAST_DATA.length) return;
-  const labels = FORECAST_DATA.map(p => new Date(p.ts).toLocaleString());
+  const labels = FORECAST_DATA.map(p => fmtTs(p.ts));
   new Chart(ctx, {
     type: "line",
     data: {
@@ -153,7 +165,7 @@ function drawScoreHistory(score) {
   if (scoreChart) scoreChart.destroy();
   scoreChart = new Chart(ctx, {
     type: "line",
-    data: { labels: runs.map(t => new Date(t).toLocaleString()), datasets },
+    data: { labels: runs.map(t => fmtTs(t)), datasets },
     options: fc.commonChartOptions(score.toUpperCase()),
   });
 }
@@ -171,7 +183,7 @@ function drawWinnerHistory() {
   new Chart(ctx, {
     type: "line",
     data: {
-      labels: WINNER_HISTORY.map(r => new Date(r.completed_at).toLocaleString()),
+      labels: WINNER_HISTORY.map(r => fmtTs(r.completed_at)),
       datasets: [{
         label: "winning algo",
         data: WINNER_HISTORY.map(r => yOf(r.winning_algo)),

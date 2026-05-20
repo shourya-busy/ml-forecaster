@@ -1,4 +1,13 @@
-from .models import Base, Forecast, ModelArtifact, Ranking, RunMetric, TrainingRun
+from .models import (
+    Base,
+    Forecast,
+    ModelArtifact,
+    Ranking,
+    RunMetric,
+    SettingsOverride,
+    TargetOverride,
+    TrainingRun,
+)
 from .repo import RegistryRepo
 from .store import ArtifactStore, VolumeArtifactStore
 
@@ -10,6 +19,8 @@ __all__ = [
     "Ranking",
     "RegistryRepo",
     "RunMetric",
+    "SettingsOverride",
+    "TargetOverride",
     "TrainingRun",
     "VolumeArtifactStore",
 ]

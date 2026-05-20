@@ -1,7 +1,12 @@
+# ---- display timezone ----------------------------------------------------
+# All UI timestamps and cron expressions below are interpreted in this
+# timezone. Storage + JSON API stay UTC; this is presentation only.
+display_timezone: "Asia/Kolkata"
+
 # ---- horizons & their retrain cadences -----------------------------------
 # step  = sampling step requested from Prometheus / Mimir
 # horizon = total prediction horizon
-# retrain = cron expression (5 fields, UTC)
+# retrain = cron expression (5 fields, interpreted in display_timezone above)
 horizons:
   short:
     step: "1min"
@@ -93,12 +98,17 @@ metrics_to_forecast:
                 / on(instance) group_left
                 sum by (instance) (netdata_system_ram_MiB_average)'
 
-    # TODO: same drill for disk. Run:
+    # Disk pressure (used GiB) per instance — simple gauge, monotonically
+    # growing in steady state which suits the disk algorithm shortlist
+    # (naive / arima / prophet / holt_winters).
+    # NB: this is total used GiB across all mount points (max across them).
+    # To switch to utilization%, you need to know your label naming. Find
+    # available disk metrics with:
     #   curl -sG http://<prom>:9090/api/v1/label/__name__/values \
     #     | jq -r '.data[]' | grep -E 'netdata.*disk.*(space|util)' | sort
-    # If you have a pre-percentage gauge use it directly; otherwise compute
-    # used / (used + avail). Verified pattern when the percentage gauge exists:
-    disk: 'max by (instance) (netdata_disk_space_GiB_average{dimension="used"}
-                / on(instance, mount_point) group_left
-                (netdata_disk_space_GiB_average{dimension="used"}
-                 + netdata_disk_space_GiB_average{dimension="avail"})) * 100'
+    # Then look at one series' labels with:
+    #   curl -sG http://<prom>:9090/api/v1/query \
+    #     --data-urlencode 'query=netdata_disk_space_GiB_average' | jq '.data.result[0].metric'
+    # to find the right disk identifier label (often `family` or `chart`)
+    # for a percentage formula.
+    disk: 'max by (instance) (netdata_disk_space_GiB_average{dimension="used"})'

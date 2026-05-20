@@ -226,3 +226,76 @@ def test_static_assets_served(tmp_path: Path, monkeypatch):
     r = client.get("/ui/static/css/app.css")
     assert r.status_code == 200
     assert "forecaster dashboard" in r.text
+
+
+def test_instances_page(tmp_path: Path, monkeypatch):
+    _seed(tmp_path, monkeypatch)
+    client = _client()
+    r = client.get("/ui/instances")
+    assert r.status_code == 200
+    body = r.text
+    assert "fake-1" in body
+    assert "detail" in body
+
+
+def test_instances_filter(tmp_path: Path, monkeypatch):
+    _seed(tmp_path, monkeypatch)
+    client = _client()
+    r = client.get("/ui/instances?q=fake-1")
+    assert r.status_code == 200
+    assert "fake-1" in r.text
+    miss = client.get("/ui/instances?q=does-not-exist")
+    assert "No instances match" in miss.text
+
+
+def test_instance_detail(tmp_path: Path, monkeypatch):
+    _seed(tmp_path, monkeypatch)
+    client = _client()
+    r = client.get("/ui/instances/fake-1")
+    assert r.status_code == 200
+    body = r.text
+    assert "Health grid" in body
+    assert "Recent runs" in body
+    assert "cpu" in body
+    not_found = client.get("/ui/instances/no-such-server")
+    assert not_found.status_code == 404
+
+
+def test_runs_page_has_sort_and_date_filters(tmp_path: Path, monkeypatch):
+    _seed(tmp_path, monkeypatch)
+    client = _client()
+    r = client.get("/ui/runs")
+    assert r.status_code == 200
+    body = r.text
+    assert 'name="since"' in body
+    assert 'name="until"' in body
+    assert "sort=started_at" in body
+
+
+def test_runs_date_range_filter(tmp_path: Path, monkeypatch):
+    _seed(tmp_path, monkeypatch)
+    client = _client()
+    r = client.get("/ui/runs?since=2099-01-01T00:00")
+    assert r.status_code == 200
+    assert "No runs match" in r.text
+    r2 = client.get("/ui/runs?since=2000-01-01T00:00")
+    assert r2.status_code == 200
+    assert "No runs match" not in r2.text
+
+
+def test_runs_sort_alternate_column(tmp_path: Path, monkeypatch):
+    _seed(tmp_path, monkeypatch)
+    client = _client()
+    r = client.get("/ui/runs?sort=duration_seconds&direction=asc")
+    assert r.status_code == 200
+    assert "sort=duration_seconds" in r.text
+
+
+def test_ist_format_visible_in_runs_table(tmp_path: Path, monkeypatch):
+    _seed(tmp_path, monkeypatch)
+    client = _client()
+    body = client.get("/ui/runs").text
+    # Cells should render in IST, not raw UTC ISO with +00:00 suffix.
+    assert "+00:00</td>" not in body
+    # IST tz marker or +0530 offset must appear somewhere in the timestamps.
+    assert "IST" in body or "+0530" in body

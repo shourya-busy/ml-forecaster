@@ -9,6 +9,8 @@
   {% elif run.status == 'failed' %}<span class="pill bad">failed</span>
   {% else %}<span class="pill muted">{{ run.status }}</span>{% endif %}
   · {{ "%.1fs"|format(run.duration_seconds or 0) }}
+  · started <span class="code">{{ run.started_at | to_local_short }}</span>
+  {% if run.completed_at %}· completed <span class="code">{{ run.completed_at | to_local_short }}</span>{% endif %}
   &nbsp;|&nbsp; <a href="{{ url_for('ui_target_detail', instance=run.instance, metric=run.metric, horizon=run.horizon) }}">target overview →</a>
 </p>
 

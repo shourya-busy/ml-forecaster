@@ -9,6 +9,7 @@ row per algo pointing at the file on disk.
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from typing import Any  # noqa: F401 — referenced in JSON-typed Mapped annotations
 
 from sqlalchemy import (
     JSON,
@@ -137,3 +138,42 @@ class Ranking(Base):
     # full ranking: [{algo, rank, composite, raw_scores, normalised_scores}, ...]
 
     run: Mapped[TrainingRun] = relationship(back_populates="ranking")
+
+
+class SettingsOverride(Base):
+    """Live, UI-editable configuration overrides layered on top of YAML+env.
+
+    Keys are dotted paths into the Settings tree, e.g.
+        training.lookback_days
+        ranking.weights.mae
+        metrics_to_forecast.queries.cpu
+        horizons.medium.retrain
+    Values are arbitrary JSON; the loader merges them in deep-merge fashion
+    just before pydantic validation.
+    """
+
+    __tablename__ = "settings_overrides"
+
+    key: Mapped[str] = mapped_column(String(256), primary_key=True)
+    value: Mapped[Any] = mapped_column(JSON_FIELD)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    updated_by: Mapped[str | None] = mapped_column(String(128), nullable=True)
+
+
+class TargetOverride(Base):
+    """Per (instance, metric, horizon) opt-in / opt-out + cron override.
+
+    Used by the scheduler to decide which targets actually fan out, and
+    by the UI to surface "is this target paused?" status.
+    """
+
+    __tablename__ = "target_overrides"
+
+    instance: Mapped[str] = mapped_column(String(256), primary_key=True)
+    metric: Mapped[str] = mapped_column(String(64), primary_key=True)
+    horizon: Mapped[str] = mapped_column(String(32), primary_key=True)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    schedule_cron: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    updated_by: Mapped[str | None] = mapped_column(String(128), nullable=True)
