@@ -1,5 +1,12 @@
 # Multiple endpoints can be defined; `active` selects which one to use.
 # Switching from Prometheus to Mimir later is a one-line config change.
+#
+# Hostnames here are CONTAINER NAMES on the shared `lgtm` docker network
+# (see the `networks:` block in docker-compose.yml). The api / worker /
+# scheduler containers attach to that network and resolve `prometheus`,
+# `mimir`, etc. by container DNS. If your LGTM containers use different
+# names, override the hostnames below — or override LGTM_NETWORK in .env
+# if they live on a different network than monitoring_default.
 data_sources:
   active: prometheus_default
   endpoints:

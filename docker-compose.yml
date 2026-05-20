@@ -38,6 +38,7 @@ services:
       context: .
       target: worker-runtime
     environment: *app-env
+    networks: [default, lgtm]
     depends_on:
       postgres:
         condition: service_healthy
@@ -51,6 +52,7 @@ services:
       context: .
       target: api-runtime
     environment: *app-env
+    networks: [default, lgtm]
     depends_on:
       postgres:
         condition: service_healthy
@@ -69,6 +71,7 @@ services:
       context: .
       target: worker-runtime
     environment: *app-env
+    networks: [default, lgtm]
     depends_on:
       postgres:
         condition: service_healthy
@@ -88,6 +91,7 @@ services:
       context: .
       target: worker-runtime
     environment: *app-env
+    networks: [default, lgtm]
     depends_on:
       postgres:
         condition: service_healthy
@@ -119,3 +123,20 @@ services:
 volumes:
   pgdata:
   model-store:
+
+# Networks
+# --------
+# `default` is the forecaster's own internal bridge — postgres + redis stay
+# unreachable from the LGTM containers.
+# `lgtm` attaches to the existing user-defined network shared by your
+# LGTM containers (prometheus, mimir, loki, tempo, grafana), so api /
+# worker / scheduler reach them by container name (e.g. prometheus:9090).
+# Override the network name via LGTM_NETWORK in .env if yours differs.
+# Find it with:
+#   docker inspect prometheus -f '{{range $$net,$$_ := .NetworkSettings.Networks}}{{$$net}}{{println}}{{end}}'
+networks:
+  default:
+    name: ml-forecaster_default
+  lgtm:
+    external: true
+    name: ${LGTM_NETWORK:-monitoring_default}
