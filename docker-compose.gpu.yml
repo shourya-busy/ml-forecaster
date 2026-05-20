@@ -5,6 +5,9 @@ services:
       target: worker-runtime
       args:
         WORKER_BASE: nvidia/cuda:12.2.2-cudnn8-runtime-ubuntu22.04
+        # Switch torch back to the CUDA build for this image. cu121 matches
+        # the CUDA 12.x runtime in the base; bump together if you upgrade.
+        TORCH_INDEX: cu121
     deploy:
       resources:
         reservations:

@@ -652,6 +652,49 @@ worker:
       reservations: { cpus: '1', memory: '2G' }
 ```
 
+### 6.7 Move Docker's data-root onto your big data disk
+
+Docker stores images, container layers, and volumes under `/var/lib/docker`
+by default — which on many cloud images sits on a small root partition.
+The worker image alone is ~2 GB (CPU-only) or ~5-6 GB (GPU build), so it's
+worth moving Docker's storage onto whichever disk you provisioned for data.
+
+Check what's where first:
+
+```bash
+$ df -h /var/lib/docker /var/www
+$ docker system df          # how much docker is using
+```
+
+If the root partition is tight and `/var/www` (or wherever your data disk
+is mounted) has space, relocate:
+
+```bash
+# 1. Stop the stack and the docker daemon
+$ cd /var/www/ml/ml-forecaster && make down
+$ sudo systemctl stop docker docker.socket
+
+# 2. Create the new data-root and copy what's there
+$ sudo mkdir -p /var/www/docker
+$ sudo rsync -aP /var/lib/docker/ /var/www/docker/
+
+# 3. Tell the daemon to use it (merge with any existing settings, e.g. log opts)
+$ sudo tee /etc/docker/daemon.json >/dev/null <<'JSON'
+{
+  "data-root": "/var/www/docker",
+  "log-driver": "json-file",
+  "log-opts": { "max-size": "100m", "max-file": "5" }
+}
+JSON
+
+# 4. Start docker, verify, then remove the old tree once you've confirmed
+$ sudo systemctl start docker
+$ docker info | grep -i "docker root dir"   # should print /var/www/docker
+$ docker compose -f /var/www/ml/ml-forecaster/docker-compose.yml ps
+# only after the stack is happy:
+$ sudo rm -rf /var/lib/docker
+```
+
 ---
 
 ## 7. Troubleshooting
@@ -659,6 +702,7 @@ worker:
 | Symptom | First thing to check | Where |
 |---|---|---|
 | `make up` says "image build failed" | `make build` in the foreground; usually a network proxy / pip mirror issue. Set `HTTP_PROXY` / `HTTPS_PROXY` env vars before `make build`. | host shell |
+| `make build` aborts with `no space left on device` while extracting `nvidia/cu*/lib/...` | PyTorch's default PyPI wheel bundles ~3-4 GB of CUDA libs. The Dockerfile now defaults to the CPU-only torch index (`TORCH_INDEX=cpu`). To recover: `docker system prune -af --volumes && docker builder prune -af`, pull latest code, then `make build` again. If your root partition is small but you have a bigger data disk, also move docker's data-root onto it (see §6.7). | `Dockerfile`, `/etc/docker/daemon.json` |
 | API healthy but `/readyz` 500s | `docker compose logs postgres` — usually disk full or `pgdata` perms after a manual `chown` | postgres |
 | `/runs/sync` returns 500, `error: "no data returned"` | Your PromQL doesn't match anything. Run the query directly against Prometheus (§5.2.2) and tune the filter | `config/default.yaml::metrics_to_forecast` |
 | `/runs/sync` errors with `too few points after fetch+resample` | Prometheus retention is shorter than your `training.lookback_days`. Either lower `lookback_days` or extend retention | `config/default.yaml::training` |
