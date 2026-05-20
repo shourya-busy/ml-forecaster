@@ -1,0 +1,121 @@
+x-app-env: &app-env
+  FORECASTER_CONFIG_DIR: /app/config
+  DATABASE_URL: postgresql+psycopg://forecaster:forecaster@postgres:5432/forecaster
+  CELERY_BROKER_URL: redis://redis:6379/0
+  CELERY_RESULT_BACKEND: redis://redis:6379/1
+  ARTIFACT_DIR: /var/lib/forecaster/models
+  LOG_LEVEL: INFO
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: forecaster
+      POSTGRES_PASSWORD: forecaster
+      POSTGRES_DB: forecaster
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U forecaster"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    ports:
+      - "5432:5432"
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    ports:
+      - "6379:6379"
+
+  migrate:
+    build:
+      context: .
+      target: worker-runtime
+    environment: *app-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: ["alembic", "-c", "/app/config/alembic.ini", "upgrade", "head"]
+    restart: "no"
+    volumes:
+      - ./config:/app/config:ro
+
+  api:
+    build:
+      context: .
+      target: api-runtime
+    environment: *app-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./config:/app/config:ro
+      - model-store:/var/lib/forecaster/models
+
+  worker:
+    build:
+      context: .
+      target: worker-runtime
+    environment: *app-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    command: ["forecaster-worker"]
+    volumes:
+      - ./config:/app/config:ro
+      - model-store:/var/lib/forecaster/models
+    deploy:
+      replicas: 2
+
+  scheduler:
+    build:
+      context: .
+      target: worker-runtime
+    environment: *app-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    command: ["forecaster-scheduler"]
+    volumes:
+      - ./config:/app/config:ro
+
+  prometheus:
+    image: prom/prometheus:v2.51.0
+    profiles: ["demo"]
+    volumes:
+      - ./deploy/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9090:9090"
+
+  grafana:
+    image: grafana/grafana:10.4.2
+    profiles: ["demo"]
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: "Admin"
+    ports:
+      - "3000:3000"
+
+volumes:
+  pgdata:
+  model-store:

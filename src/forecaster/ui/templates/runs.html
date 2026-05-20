@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}Runs{% endblock %}
+{% block content %}
+<h1>Training runs</h1>
+<p class="subtitle">Most-recent first. Filter by target and status.</p>
+
+<form class="filterbar" method="get">
+  <input type="text" name="instance" value="{{ filters.instance or '' }}" placeholder="instance">
+  <select name="metric">
+    <option value="">all metrics</option>
+    {% for m in all_metrics %}
+    <option value="{{ m }}" {% if filters.metric == m %}selected{% endif %}>{{ m }}</option>
+    {% endfor %}
+  </select>
+  <select name="horizon">
+    <option value="">all horizons</option>
+    {% for h in all_horizons %}
+    <option value="{{ h }}" {% if filters.horizon == h %}selected{% endif %}>{{ h }}</option>
+    {% endfor %}
+  </select>
+  <select name="status">
+    <option value="">any status</option>
+    {% for s in ['completed','running','failed','pending'] %}
+    <option value="{{ s }}" {% if filters.status == s %}selected{% endif %}>{{ s }}</option>
+    {% endfor %}
+  </select>
+  <button class="btn" type="submit">Apply</button>
+  <a class="btn secondary" href="{{ url_for('ui_runs') }}">Reset</a>
+</form>
+
+<table>
+  <thead>
+    <tr>
+      <th>ID</th><th>Instance</th><th>Metric</th><th>Horizon</th>
+      <th>Status</th><th>Started</th><th>Completed</th><th>Duration</th><th>Error</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for r in runs %}
+    <tr>
+      <td><a href="{{ url_for('ui_run_detail', run_id=r.id) }}">#{{ r.id }}</a></td>
+      <td class="code">{{ r.instance }}</td>
+      <td>{{ r.metric }}</td>
+      <td>{{ r.horizon }}</td>
+      <td>
+        {% if r.status == 'completed' %}<span class="pill good">completed</span>
+        {% elif r.status == 'running' %}<span class="pill warn">running</span>
+        {% elif r.status == 'failed' %}<span class="pill bad">failed</span>
+        {% else %}<span class="pill muted">{{ r.status }}</span>{% endif %}
+      </td>
+      <td class="code">{{ r.started_at or '—' }}</td>
+      <td class="code">{{ r.completed_at or '—' }}</td>
+      <td class="num">{{ "%.1fs"|format(r.duration_seconds or 0) }}</td>
+      <td class="sub">{{ (r.error or '')[:80] }}</td>
+    </tr>
+  {% else %}
+    <tr><td colspan="9" class="sub">No runs match the filter.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

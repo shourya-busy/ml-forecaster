@@ -1,0 +1,312 @@
+{
+  "nodes": [
+    {
+      "id": "docker_compose_gpu_yml_worker",
+      "label": "Worker Service (GPU)",
+      "file_type": "code",
+      "source_file": "docker-compose.gpu.yml"
+    },
+    {
+      "id": "docker_compose_yml_api",
+      "label": "API Service",
+      "file_type": "code",
+      "source_file": "docker-compose.yml"
+    },
+    {
+      "id": "docker_compose_yml_scheduler",
+      "label": "Scheduler Service",
+      "file_type": "code",
+      "source_file": "docker-compose.yml"
+    },
+    {
+      "id": "docker_compose_yml_worker",
+      "label": "Worker Service",
+      "file_type": "code",
+      "source_file": "docker-compose.yml"
+    },
+    {
+      "id": "docker_compose_yml_postgres",
+      "label": "Postgres Service",
+      "file_type": "code",
+      "source_file": "docker-compose.yml"
+    },
+    {
+      "id": "docker_compose_yml_redis",
+      "label": "Redis Service",
+      "file_type": "code",
+      "source_file": "docker-compose.yml"
+    },
+    {
+      "id": "docker_compose_yml_migrate",
+      "label": "Migration Service",
+      "file_type": "code",
+      "source_file": "docker-compose.yml"
+    },
+    {
+      "id": "readme_md_architecture",
+      "label": "Architecture Overview",
+      "file_type": "document",
+      "source_file": "README.md"
+    },
+    {
+      "id": "claude_md_project",
+      "label": "Project Guidance",
+      "file_type": "document",
+      "source_file": "CLAUDE.md"
+    },
+    {
+      "id": "config_loader_get_settings",
+      "label": "get_settings",
+      "file_type": "code",
+      "source_file": "src/forecaster/config/loader.py"
+    },
+    {
+      "id": "config_schema_settings",
+      "label": "Settings Schema",
+      "file_type": "code",
+      "source_file": "src/forecaster/config/schema.py"
+    },
+    {
+      "id": "api_main_create_app",
+      "label": "create_app",
+      "file_type": "code",
+      "source_file": "src/forecaster/api/main.py"
+    },
+    {
+      "id": "api_prometheus_export_router",
+      "label": "Prometheus Metrics Router",
+      "file_type": "code",
+      "source_file": "src/forecaster/api/prometheus_export.py"
+    },
+    {
+      "id": "scheduler_run",
+      "label": "Scheduler Entrypoint",
+      "file_type": "code",
+      "source_file": "src/forecaster/scheduling/scheduler.py"
+    },
+    {
+      "id": "scheduler_jobs_fan_out",
+      "label": "fan_out",
+      "file_type": "code",
+      "source_file": "src/forecaster/scheduling/jobs.py"
+    },
+    {
+      "id": "training_tasks_train_task",
+      "label": "train_task (Celery)",
+      "file_type": "code",
+      "source_file": "src/forecaster/training/tasks.py"
+    },
+    {
+      "id": "training_pipeline_run_pipeline",
+      "label": "run_pipeline",
+      "file_type": "code",
+      "source_file": "src/forecaster/training/pipeline.py"
+    },
+    {
+      "id": "training_parallel_train_all_algos",
+      "label": "train_all_algos",
+      "file_type": "code",
+      "source_file": "src/forecaster/training/parallel.py"
+    },
+    {
+      "id": "models_base_forecaster",
+      "label": "Forecaster Protocol",
+      "file_type": "code",
+      "source_file": "src/forecaster/models/base.py"
+    },
+    {
+      "id": "models_registry_build",
+      "label": "build_forecaster",
+      "file_type": "code",
+      "source_file": "src/forecaster/models/registry.py"
+    },
+    {
+      "id": "registry_repo_registryrepo",
+      "label": "RegistryRepo",
+      "file_type": "code",
+      "source_file": "src/forecaster/registry/repo.py"
+    },
+    {
+      "id": "registry_store_volumeartifactstore",
+      "label": "VolumeArtifactStore",
+      "file_type": "code",
+      "source_file": "src/forecaster/registry/store.py"
+    },
+    {
+      "id": "data_factory_make_data_source",
+      "label": "make_data_source",
+      "file_type": "code",
+      "source_file": "src/forecaster/data/factory.py"
+    },
+    {
+      "id": "data_base_tsdatasource",
+      "label": "TSDataSource Interface",
+      "file_type": "code",
+      "source_file": "src/forecaster/data/base.py"
+    },
+    {
+      "id": "evaluation_ranking_rank_models",
+      "label": "rank_models",
+      "file_type": "code",
+      "source_file": "src/forecaster/evaluation/ranking.py"
+    },
+    {
+      "id": "evaluation_backtest_walk_forward",
+      "label": "walk_forward",
+      "file_type": "code",
+      "source_file": "src/forecaster/evaluation/backtest.py"
+    }
+  ],
+  "edges": [
+    {
+      "source": "docker_compose_yml_api",
+      "target": "docker_compose_yml_postgres",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0
+    },
+    {
+      "source": "docker_compose_yml_api",
+      "target": "docker_compose_yml_redis",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0
+    },
+    {
+      "source": "docker_compose_yml_api",
+      "target": "docker_compose_yml_migrate",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0
+    },
+    {
+      "source": "docker_compose_yml_worker",
+      "target": "docker_compose_yml_redis",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0
+    },
+    {
+      "source": "docker_compose_yml_scheduler",
+      "target": "docker_compose_yml_redis",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0
+    },
+    {
+      "source": "api_main_create_app",
+      "target": "api_prometheus_export_router",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0
+    },
+    {
+      "source": "api_prometheus_export_router",
+      "target": "registry_repo_registryrepo",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0
+    },
+    {
+      "source": "scheduler_run",
+      "target": "scheduler_jobs_fan_out",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0
+    },
+    {
+      "source": "scheduler_jobs_fan_out",
+      "target": "training_tasks_train_task",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0
+    },
+    {
+      "source": "training_tasks_train_task",
+      "target": "training_pipeline_run_pipeline",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0
+    },
+    {
+      "source": "training_pipeline_run_pipeline",
+      "target": "training_parallel_train_all_algos",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0
+    },
+    {
+      "source": "training_pipeline_run_pipeline",
+      "target": "data_factory_make_data_source",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0
+    },
+    {
+      "source": "training_pipeline_run_pipeline",
+      "target": "evaluation_ranking_rank_models",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0
+    },
+    {
+      "source": "training_pipeline_run_pipeline",
+      "target": "registry_repo_registryrepo",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0
+    },
+    {
+      "source": "training_pipeline_run_pipeline",
+      "target": "registry_store_volumeartifactstore",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0
+    },
+    {
+      "source": "training_parallel_train_all_algos",
+      "target": "evaluation_backtest_walk_forward",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0
+    },
+    {
+      "source": "training_parallel_train_all_algos",
+      "target": "models_registry_build",
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0
+    },
+    {
+      "source": "evaluation_backtest_walk_forward",
+      "target": "models_base_forecaster",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0
+    },
+    {
+      "source": "data_factory_make_data_source",
+      "target": "data_base_tsdatasource",
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0
+    },
+    {
+      "source": "config_loader_get_settings",
+      "target": "config_schema_settings",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0
+    },
+    {
+      "source": "docker_compose_gpu_yml_worker",
+      "target": "docker_compose_yml_worker",
+      "relation": "implements",
+      "confidence": "INFERRED",
+      "confidence_score": 0.9
+    }
+  ],
+  "hyperedges": [],
+  "input_tokens": 57142,
+  "output_tokens": 2279
+}

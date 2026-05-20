@@ -1,0 +1,1 @@
+{"nodes": [{"id": "training_parallel_train_all_algos", "label": "train_all_algos", "file_type": "code", "source_file": "src/forecaster/training/parallel.py"}], "edges": [], "hyperedges": []}

@@ -1,0 +1,1 @@
+{"nodes": [{"id": "models_registry_build", "label": "build_forecaster", "file_type": "code", "source_file": "src/forecaster/models/registry.py"}], "edges": [], "hyperedges": []}

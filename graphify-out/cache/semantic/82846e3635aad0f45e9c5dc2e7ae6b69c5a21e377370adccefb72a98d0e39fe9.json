@@ -1,0 +1,1 @@
+{"nodes": [{"id": "training_tasks_train_task", "label": "train_task (Celery)", "file_type": "code", "source_file": "src/forecaster/training/tasks.py"}], "edges": [], "hyperedges": []}

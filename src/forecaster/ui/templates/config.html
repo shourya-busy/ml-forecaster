@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+{% block title %}Config{% endblock %}
+{% block content %}
+<h1>Effective configuration</h1>
+<p class="subtitle">
+  Merged YAML + env overrides as resolved at startup.
+  &nbsp;
+  <form method="post" action="{{ url_for('ui_reload_config') }}" style="display:inline">
+    <button class="btn" type="submit">Reload config</button>
+  </form>
+  &nbsp;<span class="sub">re-reads YAML and re-applies env vars; no restart</span>
+</p>
+
+<div class="grid">
+  <div class="card">
+    <div class="label">Data source</div>
+    <div class="value" style="font-size:18px">{{ settings.data_sources.active }}</div>
+    <div class="sub">{{ active_endpoint.kind }} @ {{ active_endpoint.base_url }}</div>
+  </div>
+  <div class="card">
+    <div class="label">Horizons</div>
+    <div class="value" style="font-size:18px">{{ settings.horizons|length }}</div>
+    <div class="sub">
+      {% for n, h in settings.horizons.items() %}
+        <span class="pill muted">{{ n }} · {{ h.horizon }}</span>
+      {% endfor %}
+    </div>
+  </div>
+  <div class="card">
+    <div class="label">Algorithms enabled</div>
+    <div class="value" style="font-size:18px">{{ settings.algorithms.enabled|length }}</div>
+    <div class="sub">of {{ models_registered }} registered</div>
+  </div>
+  <div class="card">
+    <div class="label">Lookback (days)</div>
+    <div class="value">{{ settings.training.lookback_days }}</div>
+    <div class="sub">backtest folds: {{ settings.training.backtest_folds }}</div>
+  </div>
+</div>
+
+<h2>Per-metric shortlists</h2>
+{% if settings.algorithms.per_metric %}
+<table>
+  <thead><tr><th>Metric</th><th>Allowed algorithms</th><th>Excluded (vs. enabled)</th></tr></thead>
+  <tbody>
+  {% for metric, allowed in settings.algorithms.per_metric.items() %}
+    <tr>
+      <td>{{ metric }}</td>
+      <td>{% for a in allowed %}<span class="pill good">{{ a }}</span> {% endfor %}</td>
+      <td>{% for a in settings.algorithms.enabled if a not in allowed %}<span class="pill muted">{{ a }}</span> {% endfor %}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="sub">No per-metric shortlists configured — every metric uses the full <code>enabled</code> list.</p>
+{% endif %}
+
+<h2>Retrain schedule</h2>
+<table>
+  <thead><tr><th>Horizon</th><th>Step</th><th>Forecast horizon</th><th>Cron (UTC)</th></tr></thead>
+  <tbody>
+  {% for n, h in settings.horizons.items() %}
+    <tr>
+      <td><span class="pill">{{ n }}</span></td>
+      <td>{{ h.step }}</td>
+      <td>{{ h.horizon }}</td>
+      <td class="code">{{ h.retrain }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+
+<h2>Ranking weights</h2>
+<table>
+  <thead><tr><th>Score</th><th>Direction</th><th>Weight</th></tr></thead>
+  <tbody>
+  {% for m in settings.ranking.metrics %}
+    <tr>
+      <td>{{ m|upper }}</td>
+      <td>{% if settings.ranking.direction[m] == 'min' %}lower is better{% else %}higher is better{% endif %}</td>
+      <td class="num">{{ settings.ranking.weights[m] }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+
+<h2>Prometheus exposition flags</h2>
+<table>
+  <thead><tr><th>Series family</th><th>State</th></tr></thead>
+  <tbody>
+    {% for key, val in settings.exposition.emit.model_dump().items() %}
+    <tr><td>{{ key }}</td>
+        <td>{% if val %}<span class="pill good">on</span>{% else %}<span class="pill muted">off</span>{% endif %}</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<h2>Raw YAML (effective)</h2>
+<pre class="code-block">{{ effective_yaml }}</pre>
+{% endblock %}

@@ -1,0 +1,12 @@
+# How to discover which servers to forecast.
+#
+# discovery=static  → use static_instances literally
+# discovery=promql  → run discovery_query against the active data source;
+#                     the values of the `instance_label` label become targets.
+targets:
+  discovery: promql
+  discovery_query: 'group by (instance) (up{job="netdata"})'
+  instance_label: instance
+  static_instances:
+    - fake-1
+    - fake-2

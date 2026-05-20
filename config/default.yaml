@@ -1,0 +1,80 @@
+# ---- horizons & their retrain cadences -----------------------------------
+# step  = sampling step requested from Prometheus / Mimir
+# horizon = total prediction horizon
+# retrain = cron expression (5 fields, UTC)
+horizons:
+  short:
+    step: "1min"
+    horizon: "1h"
+    retrain: "*/15 * * * *"
+  medium:
+    step: "5min"
+    horizon: "24h"
+    retrain: "0 * * * *"
+  long:
+    step: "1h"
+    horizon: "7d"
+    retrain: "0 2 * * *"
+
+# ---- training ------------------------------------------------------------
+training:
+  lookback_days: 30
+  backtest_folds: 5
+  backtest_holdout_fraction: 0.1
+  per_algo_lookback_override: {}    # e.g. {arima: 14, lstm: 60}
+  parallelism:
+    workers: 4
+    algos_per_job: 4
+    fetch_jitter_seconds: 30
+  confidence_alpha: 0.05
+  max_artifact_versions_kept: 3
+
+# ---- algorithm registry --------------------------------------------------
+algorithms:
+  enabled:
+    - naive
+    - seasonal_naive
+    - arima
+    - ets
+    - holt_winters
+    - prophet
+    - xgboost
+    - lightgbm
+    - lstm
+    - nbeats
+  defaults:
+    seasonal_naive: {season_length: 288}      # 24h @ 5min
+    arima: {max_p: 3, max_q: 3, seasonal: false}
+    ets: {trend: "add", seasonal: null}
+    holt_winters: {seasonal_periods: 288}
+    prophet: {weekly_seasonality: true, daily_seasonality: true}
+    xgboost: {n_estimators: 200, max_depth: 6, lags: 48}
+    lightgbm: {n_estimators: 300, num_leaves: 31, lags: 48}
+    lstm: {hidden_size: 32, num_layers: 1, epochs: 20, lags: 48, batch_size: 64}
+    nbeats: {layer_size: 64, num_blocks: 2, epochs: 20, lags: 48, batch_size: 64}
+  # Per-metric algorithm shortlist. Each list MUST be a subset of `enabled`
+  # above. A metric absent from this map falls back to the full `enabled` set.
+  # Rationale for the shipped defaults:
+  #   cpu  → bursty + strong daily/weekly seasonality → drop pure-trend models
+  #   mem  → slowly trending, mild seasonality → favour trend + smoothing models
+  #   disk → near-monotonic growth → drop seasonal models that can't capture trend
+  per_metric:
+    cpu:  [seasonal_naive, holt_winters, prophet, xgboost, lightgbm, lstm, nbeats]
+    mem:  [naive, arima, ets, prophet, xgboost, lstm]
+    disk: [naive, arima, prophet, holt_winters]
+
+# ---- ranking -------------------------------------------------------------
+ranking:
+  metrics: [mae, rmse, mape, smape, r2]
+  weights: {mae: 0.25, rmse: 0.25, mape: 0.2, smape: 0.2, r2: 0.1}
+  direction: {mae: min, rmse: min, mape: min, smape: min, r2: max}
+
+# ---- what to forecast ----------------------------------------------------
+# A PromQL expression per friendly metric name. Each query must return a
+# per-instance series; the instance label maps to a server identity.
+# Replace these with your real Netdata queries.
+metrics_to_forecast:
+  queries:
+    cpu:  'avg by (instance) (100 - rate(netdata_cpu_cpu_percentage_average{dimension="idle"}[5m]))'
+    mem:  '100 * (1 - avg by (instance) (netdata_system_ram_MiB_average{dimension="free"} / on(instance) group_left netdata_system_ram_MiB_total))'
+    disk: 'max by (instance) (netdata_disk_space_GiB_percentage{dimension="used"})'

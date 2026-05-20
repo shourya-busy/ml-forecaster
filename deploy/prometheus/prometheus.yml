@@ -1,0 +1,17 @@
+global:
+  scrape_interval: 30s
+  evaluation_interval: 30s
+
+scrape_configs:
+  # Scrape the forecaster's exposition endpoint and feed it back into
+  # Prometheus so Grafana can overlay forecasts on existing panels.
+  - job_name: forecaster
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["api:8000"]
+
+  # Stand-in for your real Netdata job. In production this scrapes your
+  # 300 edge nodes; here it's just self-scrape so the stack starts up.
+  - job_name: netdata
+    static_configs:
+      - targets: ["api:8000"]

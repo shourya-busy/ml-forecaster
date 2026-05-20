@@ -1,0 +1,16 @@
+# Multiple endpoints can be defined; `active` selects which one to use.
+# Switching from Prometheus to Mimir later is a one-line config change.
+data_sources:
+  active: prometheus_default
+  endpoints:
+    prometheus_default:
+      kind: prometheus
+      base_url: "http://prometheus:9090"
+      timeout_seconds: 30
+      verify_tls: true
+    mimir_central:
+      kind: mimir
+      base_url: "http://mimir:9009/prometheus"
+      timeout_seconds: 60
+      tenant_id: "anonymous"     # change once your Mimir multi-tenancy is set up
+      verify_tls: true

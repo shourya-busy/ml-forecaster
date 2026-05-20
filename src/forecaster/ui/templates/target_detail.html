@@ -1,0 +1,199 @@
+{% extends "base.html" %}
+{% block title %}{{ instance }} · {{ metric }} · {{ horizon }}{% endblock %}
+{% block content %}
+<h1><span class="code">{{ instance }}</span> · {{ metric }} · {{ horizon }}</h1>
+<p class="subtitle">
+  Current winner:
+  {% if summary and summary.current_winner %}
+    <span class="pill">{{ summary.current_winner }}</span>
+    since <span class="code">{{ summary.winner_since }}</span>
+    · stability:
+    {% if summary.unique_winners_recent <= 1 %}<span class="pill good">stable</span>
+    {% elif summary.unique_winners_recent <= 3 %}<span class="pill warn">flapping</span>
+    {% else %}<span class="pill bad">unstable</span>{% endif %}
+  {% else %}—{% endif %}
+  &nbsp;|&nbsp; <a href="{{ url_for('ui_targets') }}">← all targets</a>
+</p>
+
+<form method="post" action="{{ url_for('ui_trigger_run') }}" style="margin-bottom:18px">
+  <input type="hidden" name="instance" value="{{ instance }}">
+  <input type="hidden" name="metric" value="{{ metric }}">
+  <input type="hidden" name="horizon" value="{{ horizon }}">
+  <button class="btn" type="submit">Trigger a new training run</button>
+  <span class="sub">enqueued via Celery</span>
+</form>
+
+<div class="two-col">
+  <div class="chart-card">
+    <div class="chart-title"><h3>Forecast (best model)</h3>
+      <span class="sub">{{ forecasts|length }} future points</span></div>
+    <canvas id="forecastChart"></canvas>
+  </div>
+  <div class="chart-card">
+    <div class="chart-title"><h3>Latest ranking</h3>
+      <span class="sub">composite score</span></div>
+    <canvas id="rankingChart"></canvas>
+  </div>
+</div>
+
+<div class="two-col" style="margin-top:14px">
+  <div class="chart-card">
+    <div class="chart-title">
+      <h3>Score history per model</h3>
+      <select id="scoreMetric" onchange="fc_scoreReload()">
+        {% for s in score_metrics %}
+        <option value="{{ s }}" {% if s=='mae' %}selected{% endif %}>{{ s|upper }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <canvas id="scoreHistoryChart"></canvas>
+  </div>
+  <div class="chart-card">
+    <div class="chart-title"><h3>Winner history</h3></div>
+    <canvas id="winnerHistoryChart"></canvas>
+  </div>
+</div>
+
+<h2>Latest run — full ranking</h2>
+{% if ranking %}
+<table>
+  <thead><tr><th>Rank</th><th>Algo</th><th>Composite</th>
+    {% for s in score_metrics %}<th>{{ s|upper }}</th>{% endfor %}
+  </tr></thead>
+  <tbody>
+  {% for row in ranking %}
+    <tr>
+      <td>{{ row.rank }}</td>
+      <td><span class="pill {% if row.rank == 1 %}good{% endif %}">{{ row.algo }}</span></td>
+      <td class="num">{{ "%.3f"|format(row.composite) if row.composite is not none else '—' }}</td>
+      {% for s in score_metrics %}
+        <td class="num">{% if row.raw_scores and row.raw_scores.get(s) is not none %}{{ "%.3f"|format(row.raw_scores[s]) }}{% else %}—{% endif %}</td>
+      {% endfor %}
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="sub">No ranking yet — trigger a run.</p>
+{% endif %}
+
+<script>
+const FORECAST_DATA   = {{ forecasts_json|safe }};
+const RANKING_DATA    = {{ ranking_json|safe }};
+const WINNER_HISTORY  = {{ winner_history_json|safe }};
+const SCORE_HISTORY   = {{ score_history_json|safe }};
+const ALGOS_HISTORY   = {{ algos_history_json|safe }};
+
+document.addEventListener("DOMContentLoaded", () => {
+  drawForecast();
+  drawRanking();
+  drawWinnerHistory();
+  drawScoreHistory("mae");
+});
+
+function drawForecast() {
+  const ctx = document.getElementById("forecastChart");
+  if (!ctx || !FORECAST_DATA.length) return;
+  const labels = FORECAST_DATA.map(p => new Date(p.ts).toLocaleString());
+  new Chart(ctx, {
+    type: "line",
+    data: {
+      labels,
+      datasets: [
+        { label: "lower",  data: FORECAST_DATA.map(p => p.lower),
+          borderColor: "rgba(56,189,248,.0)", backgroundColor: "rgba(56,189,248,.18)",
+          fill: "+1", pointRadius: 0, tension: .2 },
+        { label: "upper",  data: FORECAST_DATA.map(p => p.upper),
+          borderColor: "rgba(56,189,248,.0)", backgroundColor: "rgba(56,189,248,.18)",
+          fill: false, pointRadius: 0, tension: .2 },
+        { label: "forecast", data: FORECAST_DATA.map(p => p.point),
+          borderColor: "#38bdf8", backgroundColor: "transparent",
+          borderWidth: 2, fill: false, pointRadius: 0, tension: .2 },
+      ],
+    },
+    options: fc.commonChartOptions(),
+  });
+}
+
+function drawRanking() {
+  const ctx = document.getElementById("rankingChart");
+  if (!ctx || !RANKING_DATA.length) return;
+  new Chart(ctx, {
+    type: "bar",
+    data: {
+      labels: RANKING_DATA.map(r => r.algo),
+      datasets: [{
+        label: "composite",
+        data: RANKING_DATA.map(r => r.composite),
+        backgroundColor: RANKING_DATA.map(r => fc.colors.forAlgo(r.algo)),
+      }],
+    },
+    options: { ...fc.commonChartOptions(), indexAxis: "y",
+      plugins: { legend: { display: false } } },
+  });
+}
+
+let scoreChart = null;
+function drawScoreHistory(score) {
+  const ctx = document.getElementById("scoreHistoryChart");
+  if (!ctx) return;
+  const rows = SCORE_HISTORY.filter(r => r.score === score);
+  const algos = [...new Set(rows.map(r => r.algo))].sort();
+  const runs  = [...new Set(rows.map(r => r.completed_at))].sort();
+  const datasets = algos.map(a => ({
+    label: a,
+    data: runs.map(t => {
+      const m = rows.find(r => r.algo === a && r.completed_at === t);
+      return m ? m.value : null;
+    }),
+    borderColor: fc.colors.forAlgo(a),
+    backgroundColor: fc.colors.forAlgo(a),
+    spanGaps: true, tension: .2, pointRadius: 2,
+  }));
+  if (scoreChart) scoreChart.destroy();
+  scoreChart = new Chart(ctx, {
+    type: "line",
+    data: { labels: runs.map(t => new Date(t).toLocaleString()), datasets },
+    options: fc.commonChartOptions(score.toUpperCase()),
+  });
+}
+function fc_scoreReload() {
+  const s = document.getElementById("scoreMetric").value;
+  drawScoreHistory(s);
+}
+
+function drawWinnerHistory() {
+  const ctx = document.getElementById("winnerHistoryChart");
+  if (!ctx || !WINNER_HISTORY.length) return;
+  // Numeric Y-axis: each algo gets an integer; show "step" line.
+  const algos = ALGOS_HISTORY;
+  const yOf = (a) => algos.indexOf(a);
+  new Chart(ctx, {
+    type: "line",
+    data: {
+      labels: WINNER_HISTORY.map(r => new Date(r.completed_at).toLocaleString()),
+      datasets: [{
+        label: "winning algo",
+        data: WINNER_HISTORY.map(r => yOf(r.winning_algo)),
+        stepped: true,
+        borderColor: "#a78bfa", backgroundColor: "transparent",
+        pointBackgroundColor: WINNER_HISTORY.map(r => fc.colors.forAlgo(r.winning_algo)),
+        pointRadius: 4, borderWidth: 2,
+      }],
+    },
+    options: {
+      ...fc.commonChartOptions(),
+      plugins: { legend: { display: false },
+                 tooltip: { callbacks: { label: (ctx) => algos[ctx.parsed.y] } } },
+      scales: {
+        ...fc.commonChartOptions().scales,
+        y: { ticks: { color: "#94a3b8", stepSize: 1,
+                      callback: v => algos[v] || "" },
+             grid: { color: "rgba(255,255,255,.05)" },
+             min: -0.5, max: algos.length - 0.5 },
+      },
+    },
+  });
+}
+</script>
+{% endblock %}

@@ -1,0 +1,17 @@
+services:
+  worker:
+    build:
+      context: .
+      target: worker-runtime
+      args:
+        WORKER_BASE: nvidia/cuda:12.2.2-cudnn8-runtime-ubuntu22.04
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    environment:
+      NVIDIA_VISIBLE_DEVICES: all
+      FORECASTER_USE_CUDA: "1"

@@ -1,0 +1,26 @@
+<table>
+  <thead>
+    <tr><th>Instance</th><th>Metric</th><th>Horizon</th><th>Status</th><th>Latest winner</th><th>Recent unique</th><th>Last run</th><th></th></tr>
+  </thead>
+  <tbody>
+  {% for row in attention %}
+    <tr>
+      <td class="code">{{ row.instance }}</td>
+      <td>{{ row.metric }}</td>
+      <td>{{ row.horizon }}</td>
+      <td>
+        {% if row.reason == 'flapping' %}<span class="pill warn">flapping</span>
+        {% elif row.reason == 'failed' %}<span class="pill bad">last run failed</span>
+        {% elif row.reason == 'stale' %}<span class="pill muted">stale (>24h)</span>
+        {% endif %}
+      </td>
+      <td>{% if row.current_winner %}<span class="pill">{{ row.current_winner }}</span>{% else %}—{% endif %}</td>
+      <td class="num">{{ row.unique_winners_recent }}</td>
+      <td class="code">{{ row.last_completed_at or '—' }}</td>
+      <td><a href="{{ url_for('ui_target_detail', instance=row.instance, metric=row.metric, horizon=row.horizon) }}">inspect →</a></td>
+    </tr>
+  {% else %}
+    <tr><td colspan="8" class="sub" style="color: var(--good)">Nothing flapping, stale, or failed. All targets healthy.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>

@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block title %}Run #{{ run.id }}{% endblock %}
+{% block content %}
+<h1>Run #{{ run.id }}</h1>
+<p class="subtitle">
+  <span class="code">{{ run.instance }}</span> · {{ run.metric }} · {{ run.horizon }} ·
+  {% if run.status == 'completed' %}<span class="pill good">completed</span>
+  {% elif run.status == 'running' %}<span class="pill warn">running</span>
+  {% elif run.status == 'failed' %}<span class="pill bad">failed</span>
+  {% else %}<span class="pill muted">{{ run.status }}</span>{% endif %}
+  · {{ "%.1fs"|format(run.duration_seconds or 0) }}
+  &nbsp;|&nbsp; <a href="{{ url_for('ui_target_detail', instance=run.instance, metric=run.metric, horizon=run.horizon) }}">target overview →</a>
+</p>
+
+{% if run.error %}
+<div class="card" style="border-color: var(--bad); margin-bottom: 16px">
+  <div class="label">Error</div>
+  <pre class="code-block" style="margin-top: 8px">{{ run.error }}</pre>
+</div>
+{% endif %}
+
+<div class="two-col">
+  <div class="chart-card">
+    <div class="chart-title"><h3>Per-algo composite (ranking)</h3></div>
+    <canvas id="rankChart"></canvas>
+  </div>
+  <div class="chart-card">
+    <div class="chart-title"><h3>Train duration per algo</h3></div>
+    <canvas id="durChart"></canvas>
+  </div>
+</div>
+
+<h2>Per-algo scores</h2>
+{% if rows %}
+<table>
+  <thead>
+    <tr>
+      <th>Algo</th><th>Composite</th>
+      {% for s in score_metrics %}<th>{{ s|upper }}</th>{% endfor %}
+      <th>Train duration</th><th>Artifact</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for row in rows %}
+    <tr>
+      <td><span class="pill {% if row.is_winner %}good{% endif %}">{{ row.algo }}</span></td>
+      <td class="num">{{ "%.3f"|format(row.composite) if row.composite is not none else '—' }}</td>
+      {% for s in score_metrics %}
+        <td class="num">{% if row.scores.get(s) is not none %}{{ "%.3f"|format(row.scores[s]) }}{% else %}—{% endif %}</td>
+      {% endfor %}
+      <td class="num">{{ "%.1fs"|format(row.duration or 0) }}</td>
+      <td class="code">{{ row.artifact or '—' }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="sub">No scored algos yet.</p>
+{% endif %}
+
+<h2>Config snapshot</h2>
+<pre class="code-block">{{ config_snapshot_json }}</pre>
+
+<script>
+const RANK = {{ rank_chart_json|safe }};
+const DUR  = {{ dur_chart_json|safe }};
+document.addEventListener("DOMContentLoaded", () => {
+  if (RANK.length) {
+    new Chart(document.getElementById("rankChart"), {
+      type: "bar",
+      data: { labels: RANK.map(r => r.algo),
+              datasets: [{ label: "composite",
+                           data: RANK.map(r => r.composite),
+                           backgroundColor: RANK.map(r => fc.colors.forAlgo(r.algo)) }] },
+      options: { ...fc.commonChartOptions(), indexAxis: "y",
+                 plugins: { legend: { display: false } } },
+    });
+  }
+  if (DUR.length) {
+    new Chart(document.getElementById("durChart"), {
+      type: "bar",
+      data: { labels: DUR.map(r => r.algo),
+              datasets: [{ label: "seconds",
+                           data: DUR.map(r => r.duration),
+                           backgroundColor: DUR.map(r => fc.colors.forAlgo(r.algo)) }] },
+      options: { ...fc.commonChartOptions("seconds"),
+                 plugins: { legend: { display: false } } },
+    });
+  }
+});
+</script>
+{% endblock %}

@@ -1,0 +1,19 @@
+# Controls Prometheus exposition cardinality at the /metrics endpoint.
+# Flip per_model_* to false in production once the system is happily
+# scraping the best-model series.
+exposition:
+  emit:
+    best_model_forecast: true       # ~ instances × metrics × horizons
+    best_model_bounds: true         # × 2 (lower/upper)
+    per_model_forecast: true        # × n_models   ← biggest
+    per_model_bounds: true          # × n_models × 2
+    ranking_scores: true            # × n_models × n_score_metrics
+    training_run_timestamps: true
+    training_durations: true
+    diagnostics: true               # forecaster_winner{model} + forecaster_winner_unique_recent
+  labels:
+    include_model_version: false
+    include_horizon: true
+  series_per_forecast: 60           # emit at most N future points per (server, metric, horizon)
+  diagnostics:
+    recent_window_runs: 10          # K for forecaster_winner_unique_recent (1 = stable, K = flapping)

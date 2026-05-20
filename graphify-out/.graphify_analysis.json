@@ -1,0 +1,756 @@
+{
+  "communities": {
+    "0": [
+      "api_deps_settings_dep",
+      "config_loader_apply_env_overrides",
+      "config_loader_coerce",
+      "config_loader_deep_merge",
+      "config_loader_get_settings",
+      "config_loader_load_settings",
+      "config_loader_rationale_1",
+      "config_loader_rationale_105",
+      "config_loader_rationale_59",
+      "config_loader_rationale_75",
+      "config_loader_rationale_95",
+      "config_loader_read_yaml",
+      "config_loader_reload_settings",
+      "observability_logging_configure_logging",
+      "observability_logging_rationale_1",
+      "routes_config_get_effective",
+      "routes_config_rationale_1",
+      "routes_config_reload",
+      "scheduler_jobs_fan_out",
+      "scheduler_run",
+      "scheduling_jobs_discover_targets",
+      "scheduling_jobs_fan_out",
+      "scheduling_jobs_rationale_1",
+      "scheduling_jobs_rationale_21",
+      "scheduling_jobs_rationale_36",
+      "scheduling_scheduler_build_scheduler",
+      "scheduling_scheduler_install_sighup_reload",
+      "scheduling_scheduler_rationale_1",
+      "scheduling_scheduler_run",
+      "scripts_seed_synthetic_main",
+      "scripts_seed_synthetic_py",
+      "scripts_seed_synthetic_rationale_1",
+      "src_forecaster_api_routes_config_py",
+      "src_forecaster_config_init_py",
+      "src_forecaster_config_loader_py",
+      "src_forecaster_observability_init_py",
+      "src_forecaster_observability_logging_py",
+      "src_forecaster_scheduling_init_py",
+      "src_forecaster_scheduling_jobs_py",
+      "src_forecaster_scheduling_scheduler_py",
+      "src_forecaster_training_tasks_py",
+      "tests_unit_test_config_py",
+      "training_tasks_make_app",
+      "training_tasks_rationale_1",
+      "training_tasks_run_worker",
+      "training_tasks_train_task",
+      "unit_test_config_test_default_config_loads",
+      "unit_test_config_test_env_overrides"
+    ],
+    "1": [
+      "features_lag_features_future_index",
+      "features_lag_features_rationale_1",
+      "models_arima_rationale_1",
+      "models_base_fit",
+      "models_base_forecastresult",
+      "models_base_forecastresult_as_records",
+      "models_base_load",
+      "models_base_predict_interval",
+      "models_base_rationale_1",
+      "models_base_rationale_29",
+      "models_ets_rationale_1",
+      "models_holt_winters_rationale_1",
+      "models_init_rationale_1",
+      "models_lightgbm_model_rationale_1",
+      "models_naive_rationale_1",
+      "models_nbeats_device",
+      "models_nbeats_nbeatsforecaster",
+      "models_nbeats_nbeatsforecaster_build_net",
+      "models_nbeats_nbeatsforecaster_fit",
+      "models_nbeats_nbeatsforecaster_init",
+      "models_nbeats_nbeatsforecaster_lookback_required",
+      "models_nbeats_nbeatsforecaster_predict",
+      "models_nbeats_rationale_1",
+      "models_registry_rationale_1",
+      "models_registry_rationale_17",
+      "models_registry_register",
+      "models_seasonal_naive_rationale_1",
+      "models_xgboost_model_rationale_1",
+      "src_forecaster_features_init_py",
+      "src_forecaster_features_lag_features_py",
+      "src_forecaster_models_arima_py",
+      "src_forecaster_models_base_py",
+      "src_forecaster_models_ets_py",
+      "src_forecaster_models_holt_winters_py",
+      "src_forecaster_models_init_py",
+      "src_forecaster_models_lightgbm_model_py",
+      "src_forecaster_models_naive_py",
+      "src_forecaster_models_nbeats_py",
+      "src_forecaster_models_prophet_model_py",
+      "src_forecaster_models_registry_py",
+      "src_forecaster_models_seasonal_naive_py",
+      "src_forecaster_models_xgboost_model_py"
+    ],
+    "2": [
+      "declarativebase",
+      "registry_models_base",
+      "registry_models_forecast",
+      "registry_models_modelartifact",
+      "registry_models_ranking",
+      "registry_models_rationale_1",
+      "registry_models_rationale_126",
+      "registry_models_rationale_65",
+      "registry_models_rationale_98",
+      "registry_models_runmetric",
+      "registry_models_trainingrun",
+      "registry_models_utcnow",
+      "registry_repo_rationale_1",
+      "registry_repo_rationale_135",
+      "registry_repo_rationale_193",
+      "registry_repo_rationale_209",
+      "registry_repo_rationale_26",
+      "registry_repo_rationale_261",
+      "registry_repo_rationale_287",
+      "registry_repo_registryrepo",
+      "registry_repo_registryrepo_add_artifact",
+      "registry_repo_registryrepo_add_forecasts",
+      "registry_repo_registryrepo_add_metrics",
+      "registry_repo_registryrepo_add_ranking",
+      "registry_repo_registryrepo_create_run",
+      "registry_repo_registryrepo_create_schema",
+      "registry_repo_registryrepo_get_run",
+      "registry_repo_registryrepo_init",
+      "registry_repo_registryrepo_latest_forecasts",
+      "registry_repo_registryrepo_latest_rankings",
+      "registry_repo_registryrepo_list_runs",
+      "registry_repo_registryrepo_mark_completed",
+      "registry_repo_registryrepo_prune_old_artifacts",
+      "registry_repo_registryrepo_score_history",
+      "registry_repo_registryrepo_winner_history",
+      "registry_repo_registryrepo_winners_summary",
+      "registry_repo_session",
+      "src_forecaster_registry_init_py",
+      "src_forecaster_registry_models_py",
+      "src_forecaster_registry_repo_py"
+    ],
+    "3": [
+      "data_base_discover_instances",
+      "data_base_fetch_range",
+      "data_base_fetcherror",
+      "data_base_rationale_1",
+      "data_base_rationale_18",
+      "data_base_rationale_23",
+      "data_base_rationale_36",
+      "data_base_timeseries",
+      "data_base_tsdatasource",
+      "data_base_tsdatasource_close",
+      "data_factory_rationale_1",
+      "data_mimir_client_mimirclient",
+      "data_mimir_client_rationale_1",
+      "data_mimir_client_rationale_16",
+      "data_prometheus_client_build_headers",
+      "data_prometheus_client_ensure_utc",
+      "data_prometheus_client_prometheusclient",
+      "data_prometheus_client_prometheusclient_close",
+      "data_prometheus_client_prometheusclient_discover_instances",
+      "data_prometheus_client_prometheusclient_fetch_range",
+      "data_prometheus_client_prometheusclient_init",
+      "data_prometheus_client_query_instant",
+      "data_prometheus_client_query_range",
+      "data_prometheus_client_rationale_1",
+      "data_prometheus_client_rationale_27",
+      "data_prometheus_client_rationale_37",
+      "data_prometheus_client_step_to_seconds",
+      "prometheusclient",
+      "src_forecaster_data_base_py",
+      "src_forecaster_data_factory_py",
+      "src_forecaster_data_init_py",
+      "src_forecaster_data_mimir_client_py",
+      "src_forecaster_data_prometheus_client_py",
+      "tsdatasource"
+    ],
+    "4": [
+      "evaluation_backtest_backtestresult",
+      "evaluation_backtest_fold_indices",
+      "evaluation_backtest_rationale_1",
+      "evaluation_backtest_rationale_30",
+      "evaluation_backtest_rationale_47",
+      "evaluation_backtest_walk_forward",
+      "evaluation_metrics_all_metrics",
+      "evaluation_metrics_clean",
+      "evaluation_metrics_mae",
+      "evaluation_metrics_mape",
+      "evaluation_metrics_r2",
+      "evaluation_metrics_rationale_1",
+      "evaluation_metrics_rmse",
+      "evaluation_metrics_smape",
+      "src_forecaster_evaluation_backtest_py",
+      "src_forecaster_evaluation_init_py",
+      "src_forecaster_evaluation_metrics_py",
+      "src_forecaster_training_parallel_py",
+      "tests_unit_test_metrics_py",
+      "training_parallel_algoresult",
+      "training_parallel_rationale_1",
+      "training_parallel_rationale_125",
+      "training_parallel_rationale_56",
+      "training_parallel_train_all_algos",
+      "training_parallel_train_one",
+      "unit_test_metrics_test_all_metrics_returns_5_keys",
+      "unit_test_metrics_test_mae_basic",
+      "unit_test_metrics_test_mape_skips_zeros",
+      "unit_test_metrics_test_nan_safe",
+      "unit_test_metrics_test_r2_perfect",
+      "unit_test_metrics_test_rmse_basic",
+      "unit_test_metrics_test_smape_basic"
+    ],
+    "5": [
+      "data_factory_make_data_source",
+      "models_arima_arimaforecaster_fit",
+      "registry_store_artifactstore",
+      "registry_store_delete",
+      "registry_store_load",
+      "registry_store_rationale_1",
+      "registry_store_save",
+      "registry_store_volumeartifactstore",
+      "registry_store_volumeartifactstore_delete",
+      "registry_store_volumeartifactstore_init",
+      "registry_store_volumeartifactstore_load",
+      "registry_store_volumeartifactstore_path_for",
+      "registry_store_volumeartifactstore_save",
+      "routes_runs_get_run",
+      "routes_runs_list_runs",
+      "routes_runs_rationale_1",
+      "routes_runs_rationale_38",
+      "routes_runs_runrequest",
+      "routes_runs_trigger",
+      "routes_runs_trigger_sync",
+      "runtimeerror",
+      "src_forecaster_api_routes_runs_py",
+      "src_forecaster_registry_store_py",
+      "src_forecaster_training_init_py",
+      "src_forecaster_training_pipeline_py",
+      "training_pipeline_fetch_series",
+      "training_pipeline_finite",
+      "training_pipeline_horizon_steps",
+      "training_pipeline_rationale_1",
+      "training_pipeline_rationale_61",
+      "training_pipeline_run_pipeline",
+      "training_pipeline_step_to_timedelta"
+    ],
+    "6": [
+      "dashboards_forecaster_diagnostics_annotations",
+      "dashboards_forecaster_diagnostics_annotations_list",
+      "dashboards_forecaster_diagnostics_description",
+      "dashboards_forecaster_diagnostics_editable",
+      "dashboards_forecaster_diagnostics_fiscalyearstartmonth",
+      "dashboards_forecaster_diagnostics_graphtooltip",
+      "dashboards_forecaster_diagnostics_id",
+      "dashboards_forecaster_diagnostics_links",
+      "dashboards_forecaster_diagnostics_livenow",
+      "dashboards_forecaster_diagnostics_panels",
+      "dashboards_forecaster_diagnostics_refresh",
+      "dashboards_forecaster_diagnostics_schemaversion",
+      "dashboards_forecaster_diagnostics_tags",
+      "dashboards_forecaster_diagnostics_templating",
+      "dashboards_forecaster_diagnostics_templating_list",
+      "dashboards_forecaster_diagnostics_time",
+      "dashboards_forecaster_diagnostics_time_from",
+      "dashboards_forecaster_diagnostics_time_to",
+      "dashboards_forecaster_diagnostics_timepicker",
+      "dashboards_forecaster_diagnostics_timezone",
+      "dashboards_forecaster_diagnostics_title",
+      "dashboards_forecaster_diagnostics_uid",
+      "dashboards_forecaster_diagnostics_version",
+      "dashboards_forecaster_diagnostics_weekstart",
+      "deploy_grafana_dashboards_forecaster_diagnostics_json"
+    ],
+    "7": [
+      "basemodel",
+      "config_schema_artifactstoreconfig",
+      "config_schema_at_least_one",
+      "config_schema_datasourceendpoint",
+      "config_schema_datasourcesconfig",
+      "config_schema_diagnosticsconfig",
+      "config_schema_expositionconfig",
+      "config_schema_expositionemit",
+      "config_schema_expositionlabels",
+      "config_schema_horizons_not_empty",
+      "config_schema_horizonspec",
+      "config_schema_metricstoforecast",
+      "config_schema_parallelism",
+      "config_schema_rankingconfig",
+      "config_schema_rationale_1",
+      "config_schema_rationale_122",
+      "config_schema_settings",
+      "config_schema_targetsconfig",
+      "config_schema_trainingconfig",
+      "config_schema_unique",
+      "config_schema_validate_per_metric",
+      "config_schema_weights_sum_close_to_one",
+      "src_forecaster_config_schema_py"
+    ],
+    "8": [
+      "api_deps_rationale_1",
+      "api_deps_repo",
+      "api_deps_repo_dep",
+      "routes_diagnostics_rationale_1",
+      "routes_diagnostics_score_history",
+      "routes_diagnostics_winner_history",
+      "routes_diagnostics_winners",
+      "routes_forecasts_latest",
+      "routes_forecasts_rationale_1",
+      "routes_health_healthz",
+      "routes_health_readyz",
+      "routes_models_list_models",
+      "routes_models_rationale_1",
+      "routes_rankings_latest",
+      "src_forecaster_api_deps_py",
+      "src_forecaster_api_routes_diagnostics_py",
+      "src_forecaster_api_routes_forecasts_py",
+      "src_forecaster_api_routes_health_py",
+      "src_forecaster_api_routes_models_py",
+      "src_forecaster_api_routes_rankings_py"
+    ],
+    "9": [
+      "api_main_create_app",
+      "api_main_rationale_1",
+      "api_main_run",
+      "api_prometheus_export_build_registry",
+      "api_prometheus_export_metrics",
+      "api_prometheus_export_rationale_1",
+      "api_prometheus_export_rationale_34",
+      "api_prometheus_export_router",
+      "integration_test_api_metrics_rationale_1",
+      "integration_test_api_metrics_test_metrics_endpoint_emits_after_run",
+      "integration_test_diagnostics_rationale_1",
+      "integration_test_diagnostics_rationale_12",
+      "integration_test_diagnostics_seed_two_runs_with_different_winners",
+      "integration_test_diagnostics_test_diagnostics_endpoints",
+      "integration_test_diagnostics_test_diagnostics_prom_exposition",
+      "src_forecaster_api_init_py",
+      "src_forecaster_api_main_py",
+      "src_forecaster_api_prometheus_export_py",
+      "tests_integration_test_api_metrics_py",
+      "tests_integration_test_diagnostics_py"
+    ],
+    "10": [
+      "config_schema_algorithmconfig",
+      "tests_unit_test_per_metric_shortlist_py",
+      "unit_test_per_metric_shortlist_base_kwargs",
+      "unit_test_per_metric_shortlist_rationale_1",
+      "unit_test_per_metric_shortlist_rationale_65",
+      "unit_test_per_metric_shortlist_test_per_metric_duplicate_rejected",
+      "unit_test_per_metric_shortlist_test_per_metric_empty_list_rejected",
+      "unit_test_per_metric_shortlist_test_per_metric_missing_metric_falls_back",
+      "unit_test_per_metric_shortlist_test_per_metric_non_subset_rejected",
+      "unit_test_per_metric_shortlist_test_per_metric_subset_accepted",
+      "unit_test_per_metric_shortlist_test_per_metric_typo_rejected",
+      "unit_test_per_metric_shortlist_test_shipped_defaults_validate"
+    ],
+    "11": [
+      "evaluation_ranking_normalise",
+      "evaluation_ranking_rank_models",
+      "evaluation_ranking_rankedmodel",
+      "evaluation_ranking_rationale_1",
+      "evaluation_ranking_rationale_47",
+      "src_forecaster_evaluation_ranking_py",
+      "tests_unit_test_ranking_py",
+      "unit_test_ranking_make_cfg",
+      "unit_test_ranking_test_handles_single_candidate",
+      "unit_test_ranking_test_perfect_winner_first",
+      "unit_test_ranking_test_skips_missing_metric_gracefully"
+    ],
+    "12": [
+      "models_lstm_device",
+      "models_lstm_lstmforecaster",
+      "models_lstm_lstmforecaster_build_net",
+      "models_lstm_lstmforecaster_fit",
+      "models_lstm_lstmforecaster_init",
+      "models_lstm_lstmforecaster_lookback_required",
+      "models_lstm_lstmforecaster_predict",
+      "models_lstm_rationale_1",
+      "src_forecaster_models_lstm_py"
+    ],
+    "13": [
+      "docker_compose_gpu_yml_worker",
+      "docker_compose_yml_api",
+      "docker_compose_yml_migrate",
+      "docker_compose_yml_postgres",
+      "docker_compose_yml_redis",
+      "docker_compose_yml_scheduler",
+      "docker_compose_yml_worker"
+    ],
+    "14": [
+      "features_lag_features_build_lag_frame",
+      "features_lag_features_rationale_17",
+      "models_lightgbm_model_lightgbmforecaster",
+      "models_lightgbm_model_lightgbmforecaster_fit",
+      "models_lightgbm_model_lightgbmforecaster_init",
+      "models_lightgbm_model_lightgbmforecaster_lookback_required",
+      "models_lightgbm_model_lightgbmforecaster_predict"
+    ],
+    "15": [
+      "models_prophet_model_prophetforecaster",
+      "models_prophet_model_prophetforecaster_fit",
+      "models_prophet_model_prophetforecaster_future_frame",
+      "models_prophet_model_prophetforecaster_init",
+      "models_prophet_model_prophetforecaster_lookback_required",
+      "models_prophet_model_prophetforecaster_predict",
+      "models_prophet_model_prophetforecaster_predict_interval"
+    ],
+    "16": [
+      "models_base_forecaster",
+      "models_base_forecaster_init",
+      "models_base_forecaster_lookback_required",
+      "models_base_forecaster_save",
+      "models_base_rationale_49",
+      "models_base_rationale_76"
+    ],
+    "17": [
+      "features_lag_features_rationale_40",
+      "features_lag_features_recursive_forecast",
+      "tests_unit_test_lag_features_py",
+      "unit_test_lag_features_series",
+      "unit_test_lag_features_test_build_lag_frame_shape",
+      "unit_test_lag_features_test_recursive_forecast_returns_correct_length"
+    ],
+    "18": [
+      "models_registry_build",
+      "tests_unit_test_models_smoke_py",
+      "unit_test_models_smoke_dep_missing",
+      "unit_test_models_smoke_rationale_1",
+      "unit_test_models_smoke_test_model_fit_predict_smoke",
+      "unit_test_models_smoke_test_predict_interval_returns_bounds"
+    ],
+    "19": [
+      "models_arima_arimaforecaster",
+      "models_arima_arimaforecaster_init",
+      "models_arima_arimaforecaster_lookback_required",
+      "models_arima_arimaforecaster_predict",
+      "models_arima_arimaforecaster_predict_interval"
+    ],
+    "20": [
+      "models_base_baseforecaster",
+      "models_base_baseforecaster_init",
+      "models_base_baseforecaster_predict_interval",
+      "models_base_predict",
+      "models_base_rationale_91"
+    ],
+    "21": [
+      "models_ets_etsforecaster",
+      "models_ets_etsforecaster_fit",
+      "models_ets_etsforecaster_init",
+      "models_ets_etsforecaster_lookback_required",
+      "models_ets_etsforecaster_predict"
+    ],
+    "22": [
+      "models_holt_winters_holtwintersforecaster",
+      "models_holt_winters_holtwintersforecaster_fit",
+      "models_holt_winters_holtwintersforecaster_init",
+      "models_holt_winters_holtwintersforecaster_lookback_required",
+      "models_holt_winters_holtwintersforecaster_predict"
+    ],
+    "23": [
+      "baseforecaster",
+      "models_naive_naiveforecaster",
+      "models_naive_naiveforecaster_fit",
+      "models_naive_naiveforecaster_predict",
+      "models_naive_rationale_14"
+    ],
+    "24": [
+      "models_seasonal_naive_seasonalnaiveforecaster",
+      "models_seasonal_naive_seasonalnaiveforecaster_fit",
+      "models_seasonal_naive_seasonalnaiveforecaster_init",
+      "models_seasonal_naive_seasonalnaiveforecaster_lookback_required",
+      "models_seasonal_naive_seasonalnaiveforecaster_predict"
+    ],
+    "25": [
+      "models_xgboost_model_xgboostforecaster",
+      "models_xgboost_model_xgboostforecaster_fit",
+      "models_xgboost_model_xgboostforecaster_init",
+      "models_xgboost_model_xgboostforecaster_lookback_required",
+      "models_xgboost_model_xgboostforecaster_predict"
+    ],
+    "26": [
+      "integration_test_pipeline_sqlite_rationale_1",
+      "integration_test_pipeline_sqlite_rationale_29",
+      "integration_test_pipeline_sqlite_test_pipeline_end_to_end",
+      "integration_test_pipeline_sqlite_tmp_env",
+      "tests_integration_test_pipeline_sqlite_py"
+    ],
+    "27": [
+      "fixtures_synthetic_series_rationale_1",
+      "fixtures_synthetic_series_rationale_23",
+      "fixtures_synthetic_series_synthetic_series",
+      "tests_fixtures_synthetic_series_py"
+    ],
+    "28": [
+      "migrations_env_rationale_1",
+      "migrations_env_run_migrations_offline",
+      "migrations_env_run_migrations_online",
+      "src_forecaster_registry_migrations_env_py"
+    ],
+    "29": [
+      "scripts_fallback_synth_py",
+      "scripts_fallback_synth_rationale_1",
+      "scripts_fallback_synth_synthetic_series"
+    ],
+    "30": [
+      "src_forecaster_registry_migrations_versions_0001_initial_py",
+      "versions_0001_initial_downgrade",
+      "versions_0001_initial_upgrade"
+    ],
+    "31": [
+      "forecaster_init_rationale_1",
+      "src_forecaster_init_py"
+    ],
+    "32": [
+      "tests_conftest_py",
+      "tests_conftest_rationale_1"
+    ],
+    "33": [
+      "tests_unit_init_py"
+    ],
+    "34": [
+      "tests_integration_init_py"
+    ],
+    "35": [
+      "tests_fixtures_init_py"
+    ],
+    "36": [
+      "scripts_init_py"
+    ],
+    "37": [
+      "models_base_rationale_63"
+    ],
+    "38": [
+      "models_base_rationale_67"
+    ],
+    "39": [
+      "models_base_rationale_73"
+    ],
+    "40": [
+      "registry_store_rationale_19"
+    ],
+    "41": [
+      "registry_store_rationale_23"
+    ],
+    "42": [
+      "registry_store_rationale_27"
+    ],
+    "43": [
+      "src_forecaster_api_routes_init_py"
+    ],
+    "44": [
+      "data_base_rationale_49"
+    ],
+    "45": [
+      "data_base_rationale_53"
+    ],
+    "46": [
+      "readme_md_architecture"
+    ],
+    "47": [
+      "claude_md_project"
+    ]
+  },
+  "cohesion": {
+    "0": 0.061170212765957445,
+    "1": 0.06620209059233449,
+    "2": 0.08846153846153847,
+    "3": 0.08912655971479501,
+    "4": 0.10080645161290322,
+    "5": 0.08064516129032258,
+    "6": 0.08,
+    "7": 0.1383399209486166,
+    "8": 0.10526315789473684,
+    "9": 0.12105263157894737,
+    "10": 0.3333333333333333,
+    "11": 0.3090909090909091,
+    "12": 0.3333333333333333,
+    "13": 0.2857142857142857,
+    "14": 0.3333333333333333,
+    "15": 0.47619047619047616,
+    "16": 0.3333333333333333,
+    "17": 0.4666666666666667,
+    "18": 0.4666666666666667,
+    "19": 0.5,
+    "20": 0.4,
+    "21": 0.4,
+    "22": 0.4,
+    "23": 0.4,
+    "24": 0.4,
+    "25": 0.5,
+    "26": 0.4,
+    "27": 0.5,
+    "28": 0.5,
+    "29": 0.6666666666666666,
+    "30": 0.6666666666666666,
+    "31": 1.0,
+    "32": 1.0,
+    "33": 1.0,
+    "34": 1.0,
+    "35": 1.0,
+    "36": 1.0,
+    "37": 1.0,
+    "38": 1.0,
+    "39": 1.0,
+    "40": 1.0,
+    "41": 1.0,
+    "42": 1.0,
+    "43": 1.0,
+    "44": 1.0,
+    "45": 1.0,
+    "46": 1.0,
+    "47": 1.0
+  },
+  "gods": [
+    {
+      "id": "registry_repo_registryrepo",
+      "label": "RegistryRepo",
+      "degree": 29
+    },
+    {
+      "id": "models_base_baseforecaster",
+      "label": "BaseForecaster",
+      "degree": 15
+    },
+    {
+      "id": "training_pipeline_run_pipeline",
+      "label": "run_pipeline()",
+      "degree": 14
+    },
+    {
+      "id": "registry_repo_session",
+      "label": "session()",
+      "degree": 14
+    },
+    {
+      "id": "config_loader_get_settings",
+      "label": "get_settings()",
+      "degree": 13
+    },
+    {
+      "id": "data_prometheus_client_prometheusclient",
+      "label": "PrometheusClient",
+      "degree": 11
+    },
+    {
+      "id": "config_loader_load_settings",
+      "label": "load_settings()",
+      "degree": 10
+    },
+    {
+      "id": "models_prophet_model_prophetforecaster",
+      "label": "ProphetForecaster",
+      "degree": 9
+    },
+    {
+      "id": "config_schema_algorithmconfig",
+      "label": "AlgorithmConfig",
+      "degree": 8
+    },
+    {
+      "id": "models_lstm_lstmforecaster",
+      "label": "LSTMForecaster",
+      "degree": 8
+    }
+  ],
+  "surprises": [
+    {
+      "source": "test_all_metrics_returns_5_keys()",
+      "target": "all_metrics()",
+      "source_files": [
+        "tests/unit/test_metrics.py",
+        "src/forecaster/evaluation/metrics.py"
+      ],
+      "confidence": "INFERRED",
+      "relation": "calls",
+      "why": "inferred connection - not explicitly stated in source; connects across different repos/directories; peripheral node `test_all_metrics_returns_5_keys()` unexpectedly reaches hub `all_metrics()`"
+    },
+    {
+      "source": "test_nan_safe()",
+      "target": "all_metrics()",
+      "source_files": [
+        "tests/unit/test_metrics.py",
+        "src/forecaster/evaluation/metrics.py"
+      ],
+      "confidence": "INFERRED",
+      "relation": "calls",
+      "why": "inferred connection - not explicitly stated in source; connects across different repos/directories; peripheral node `test_nan_safe()` unexpectedly reaches hub `all_metrics()`"
+    },
+    {
+      "source": "test_build_lag_frame_shape()",
+      "target": "build_lag_frame()",
+      "source_files": [
+        "tests/unit/test_lag_features.py",
+        "src/forecaster/features/lag_features.py"
+      ],
+      "confidence": "INFERRED",
+      "relation": "calls",
+      "why": "inferred connection - not explicitly stated in source; connects across different repos/directories; bridges separate communities"
+    },
+    {
+      "source": "make_cfg()",
+      "target": "RankingConfig",
+      "source_files": [
+        "tests/unit/test_ranking.py",
+        "src/forecaster/config/schema.py"
+      ],
+      "confidence": "INFERRED",
+      "relation": "calls",
+      "why": "inferred connection - not explicitly stated in source; connects across different repos/directories; bridges separate communities"
+    },
+    {
+      "source": "test_default_config_loads()",
+      "target": "load_settings()",
+      "source_files": [
+        "tests/unit/test_config.py",
+        "src/forecaster/config/loader.py"
+      ],
+      "confidence": "INFERRED",
+      "relation": "calls",
+      "why": "inferred connection - not explicitly stated in source; connects across different repos/directories; peripheral node `test_default_config_loads()` unexpectedly reaches hub `load_settings()`"
+    }
+  ],
+  "questions": [
+    {
+      "type": "bridge_node",
+      "question": "Why does `run_pipeline()` connect `Community 5` to `Community 0`, `Community 2`, `Community 11`, `Community 4`?",
+      "why": "High betweenness centrality (0.142) - this node is a cross-community bridge."
+    },
+    {
+      "type": "bridge_node",
+      "question": "Why does `RegistryRepo` connect `Community 2` to `Community 8`, `Community 9`, `Community 26`, `Community 5`?",
+      "why": "High betweenness centrality (0.130) - this node is a cross-community bridge."
+    },
+    {
+      "type": "bridge_node",
+      "question": "Why does `BaseForecaster` connect `Community 20` to `Community 1`, `Community 12`, `Community 14`, `Community 15`, `Community 16`, `Community 19`, `Community 21`, `Community 22`, `Community 23`, `Community 24`, `Community 25`?",
+      "why": "High betweenness centrality (0.095) - this node is a cross-community bridge."
+    },
+    {
+      "type": "verify_inferred",
+      "question": "Are the 9 inferred relationships involving `RegistryRepo` (e.g. with `Base` and `Forecast`) actually correct?",
+      "why": "`RegistryRepo` has 9 INFERRED edges - model-reasoned connections that need verification."
+    },
+    {
+      "type": "verify_inferred",
+      "question": "Are the 10 inferred relationships involving `BaseForecaster` (e.g. with `HoltWintersForecaster` and `ProphetForecaster`) actually correct?",
+      "why": "`BaseForecaster` has 10 INFERRED edges - model-reasoned connections that need verification."
+    },
+    {
+      "type": "isolated_nodes",
+      "question": "What connects `list`, `description`, `editable` to the rest of the system?",
+      "why": "129 weakly-connected nodes found - possible documentation gaps or missing edges."
+    },
+    {
+      "type": "low_cohesion",
+      "question": "Should `Community 0` be split into smaller, more focused modules?",
+      "why": "Cohesion score 0.061170212765957445 - nodes in this community are weakly interconnected."
+    }
+  ]
+}

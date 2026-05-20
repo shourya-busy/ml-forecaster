@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Overview{% endblock %}
+{% block content %}
+<h1>System overview</h1>
+<p class="subtitle">Health of the forecaster setup at a glance. Auto-refreshes every 30s.</p>
+
+<div hx-get="{{ url_for('ui_overview_cards') }}" hx-trigger="load, every 30s" hx-swap="innerHTML">
+  {% include "_overview_cards.html" %}
+</div>
+
+<h2>Recent training runs</h2>
+<div hx-get="{{ url_for('ui_recent_runs_fragment') }}" hx-trigger="load, every 30s" hx-swap="innerHTML">
+  <table><thead><tr><th>—</th></tr></thead><tbody><tr><td>loading…</td></tr></tbody></table>
+</div>
+
+<h2>Targets needing attention</h2>
+<p class="subtitle" style="margin-top:-8px">Where the ranking is flapping (≥3 distinct winners across the recent window) or no recent run exists.</p>
+<div hx-get="{{ url_for('ui_attention_fragment') }}" hx-trigger="load, every 60s" hx-swap="innerHTML">
+  <table><thead><tr><th>—</th></tr></thead><tbody><tr><td>loading…</td></tr></tbody></table>
+</div>
+{% endblock %}
