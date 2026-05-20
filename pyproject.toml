@@ -75,6 +75,12 @@ forecaster = [
     "ui/templates/*.html",
     "ui/static/css/*.css",
     "ui/static/js/*.js",
+    # alembic loads these from the installed wheel at runtime;
+    # they're not part of any Python package (no __init__.py) so we have
+    # to list them explicitly.
+    "registry/migrations/env.py",
+    "registry/migrations/script.py.mako",
+    "registry/migrations/versions/*.py",
 ]
 
 [tool.pytest.ini_options]
