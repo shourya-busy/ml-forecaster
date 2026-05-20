@@ -45,6 +45,7 @@ dependencies = [
 
     # Dashboard UI (server-rendered)
     "jinja2>=3.1",
+    "python-multipart>=0.0.9",   # required by FastAPI for Form(...) parsing
 ]
 
 [project.optional-dependencies]
