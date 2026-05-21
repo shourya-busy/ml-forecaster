@@ -65,7 +65,7 @@
         {% for algo in algos %}
         {% set info = algo_info[algo] %}
         <label class="card algo-card" data-algo="{{ algo }}" style="display: flex; gap: 10px; align-items: flex-start; cursor: pointer; {% if algo in algorithms.enabled %}border-color: var(--accent);{% endif %}">
-          <input type="checkbox" name="enabled_algos" value="{{ algo }}" {% if algo in algorithms.enabled %}checked{% endif %} style="margin-top: 4px" onchange="algoStyle(this)">
+          <input type="checkbox" name="enabled_algos" value="{{ algo }}" data-algo="{{ algo }}" {% if algo in algorithms.enabled %}checked{% endif %} style="margin-top: 4px" onchange="algoStyle(this)">
           <div style="flex: 1">
             <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap">
               <strong>{{ algo }}</strong>
@@ -101,7 +101,7 @@
       <strong>Leave a metric's row entirely empty</strong> to disable the restriction for that metric — every enabled algorithm will then train on it. This is the gate that explains "I ticked auto_arima above but it's not training for CPU": auto_arima needs to be ticked here for CPU too, or the CPU shortlist needs to be cleared.
     </p>
     <p class="sub" style="margin-bottom: 14px">
-      Only currently-<em>enabled</em> algorithms are shown. To add a new algorithm to a shortlist, enable it in the library above first, then save, then return here.
+      Every registered algorithm is listed below. Cells for algorithms that aren't currently ticked in the library above are <em>greyed out</em> — tick the library checkbox and they become available in the same form (no save-reload cycle needed).
     </p>
 
     {% for metric in all_metrics %}
@@ -121,11 +121,16 @@
                 onclick="pmAll('{{ metric }}', false)">Clear (= no restriction)</button>
       </div>
       <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 4px">
-        {% for algo in all_algos if algo in algorithms.enabled %}
-        <label style="display: flex; align-items: center; gap: 6px; padding: 4px 8px; background: var(--panel-2); border-radius: 4px; cursor: pointer">
+        {% for algo in all_algos %}
+        {% set is_enabled = algo in algorithms.enabled %}
+        <label class="pm-cell{% if not is_enabled %} pm-disabled{% endif %}"
+               data-algo="{{ algo }}"
+               title="{% if not is_enabled %}Tick {{ algo }} in the algorithm library above to make this selectable.{% endif %}"
+               style="display: flex; align-items: center; gap: 6px; padding: 4px 8px; background: var(--panel-2); border-radius: 4px; cursor: pointer{% if not is_enabled %}; opacity: 0.45; cursor: not-allowed{% endif %}">
           <input type="checkbox" name="per_metric__{{ metric }}" value="{{ algo }}"
-                 data-metric="{{ metric }}"
-                 {% if algo in current %}checked{% endif %}>
+                 data-metric="{{ metric }}" data-algo="{{ algo }}"
+                 {% if algo in current %}checked{% endif %}
+                 {% if not is_enabled %}disabled{% endif %}>
           <span style="font-size: 12px">{{ algo }}</span>
         </label>
         {% endfor %}
@@ -135,10 +140,29 @@
   </fieldset>
 
   <script>
+  function syncPmAvailability(algo, enabled) {
+    document.querySelectorAll(`label.pm-cell[data-algo="${algo}"]`).forEach(lbl => {
+      const cb = lbl.querySelector("input[type=checkbox]");
+      if (enabled) {
+        lbl.classList.remove("pm-disabled");
+        lbl.style.opacity = "";
+        lbl.style.cursor = "pointer";
+        lbl.title = "";
+        if (cb) cb.disabled = false;
+      } else {
+        lbl.classList.add("pm-disabled");
+        lbl.style.opacity = "0.45";
+        lbl.style.cursor = "not-allowed";
+        lbl.title = `Tick ${algo} in the algorithm library above to make this selectable.`;
+        if (cb) { cb.disabled = true; cb.checked = false; }
+      }
+    });
+  }
   function algoStyle(cb) {
     const card = cb.closest(".algo-card");
     card.style.borderColor = cb.checked ? "var(--accent)" : "var(--border)";
     updateAlgoCounter();
+    syncPmAvailability(cb.value, cb.checked);
   }
   function algoBulk(state) {
     document.querySelectorAll("input[name=enabled_algos]").forEach(cb => {
@@ -158,7 +182,7 @@
     if (el) el.textContent = `(${on} of ${total} enabled)`;
   }
   function pmAll(metric, state) {
-    const sel = `input[name="per_metric__${metric}"]`;
+    const sel = `input[name="per_metric__${metric}"]:not([disabled])`;
     document.querySelectorAll(sel).forEach(cb => { cb.checked = state; });
   }
   </script>
