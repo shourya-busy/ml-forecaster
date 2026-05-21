@@ -72,6 +72,13 @@
               <span class="pill muted" style="font-size: 10px">{{ info.family }}</span>
               <span class="pill muted" style="font-size: 10px">{{ info.complexity }}</span>
               <span class="pill muted" style="font-size: 10px">{{ info.speed }}</span>
+              {% if will_not_train.get(algo) %}
+              <span class="pill bad" style="font-size: 10px" title="Enabled but not present in any per-metric shortlist below — add it to at least one metric or clear that metric's shortlist for this algo to compete.">⚠ won't train</span>
+              {% elif algo in algorithms.enabled and metrics_for_algo.get(algo) %}
+              <span class="pill good" style="font-size: 10px">trains on: {{ metrics_for_algo[algo] | join(', ') }}{% if metrics_without_shortlist %} + {{ metrics_without_shortlist | join(', ') }}{% endif %}</span>
+              {% elif algo in algorithms.enabled %}
+              <span class="pill good" style="font-size: 10px">trains on all metrics</span>
+              {% endif %}
             </div>
             <p class="sub" style="margin: 6px 0 4px">{{ info.description }}</p>
             <p class="sub" style="margin: 0; color: var(--text); font-size: 12px"><strong>When:</strong> {{ info.when_to_use }}</p>
@@ -85,6 +92,46 @@
       <strong>Why can't I add new algorithms from this page?</strong>
       Adding a model means executing new Python inside the worker — that's an arbitrary-code-execution surface and doesn't belong behind a web form. The {{ total_registered }} algorithms above span every major forecasting family. If you genuinely need another, add a file under <code>src/forecaster/models/</code>, decorate the class with <code>@register("name")</code>, and rebuild — it appears here automatically. See <code>docs/adding-an-algorithm.md</code>.
     </p>
+  </fieldset>
+
+  <fieldset style="border: 1px solid var(--border); padding: 14px; border-radius: 6px">
+    <legend>&nbsp;Per-metric shortlists&nbsp;</legend>
+    <p class="sub">
+      Each tick below restricts which <em>enabled</em> algorithms compete for that specific metric.
+      <strong>Leave a metric's row entirely empty</strong> to disable the restriction for that metric — every enabled algorithm will then train on it. This is the gate that explains "I ticked auto_arima above but it's not training for CPU": auto_arima needs to be ticked here for CPU too, or the CPU shortlist needs to be cleared.
+    </p>
+    <p class="sub" style="margin-bottom: 14px">
+      Only currently-<em>enabled</em> algorithms are shown. To add a new algorithm to a shortlist, enable it in the library above first, then save, then return here.
+    </p>
+
+    {% for metric in all_metrics %}
+    {% set current = per_metric.get(metric, []) %}
+    {% set has_restriction = metric in per_metric %}
+    <div style="margin-bottom: 16px; padding: 10px; border: 1px solid var(--border); border-radius: 6px">
+      <div style="display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 8px">
+        <strong style="font-size: 14px">{{ metric }}</strong>
+        {% if has_restriction %}
+        <span class="pill warn" style="font-size: 10px">restricted to {{ current | length }} algo(s)</span>
+        {% else %}
+        <span class="pill good" style="font-size: 10px">no restriction — every enabled algo trains</span>
+        {% endif %}
+        <button type="button" class="btn secondary" style="padding: 2px 8px; font-size: 11px; margin-left: auto"
+                onclick="pmAll('{{ metric }}', true)">Select all enabled</button>
+        <button type="button" class="btn secondary" style="padding: 2px 8px; font-size: 11px"
+                onclick="pmAll('{{ metric }}', false)">Clear (= no restriction)</button>
+      </div>
+      <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 4px">
+        {% for algo in all_algos if algo in algorithms.enabled %}
+        <label style="display: flex; align-items: center; gap: 6px; padding: 4px 8px; background: var(--panel-2); border-radius: 4px; cursor: pointer">
+          <input type="checkbox" name="per_metric__{{ metric }}" value="{{ algo }}"
+                 data-metric="{{ metric }}"
+                 {% if algo in current %}checked{% endif %}>
+          <span style="font-size: 12px">{{ algo }}</span>
+        </label>
+        {% endfor %}
+      </div>
+    </div>
+    {% endfor %}
   </fieldset>
 
   <script>
@@ -109,6 +156,10 @@
     const on = document.querySelectorAll("input[name=enabled_algos]:checked").length;
     const el = document.getElementById("algo-counter");
     if (el) el.textContent = `(${on} of ${total} enabled)`;
+  }
+  function pmAll(metric, state) {
+    const sel = `input[name="per_metric__${metric}"]`;
+    document.querySelectorAll(sel).forEach(cb => { cb.checked = state; });
   }
   </script>
 

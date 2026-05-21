@@ -1314,8 +1314,6 @@ def manage_training_page(
     request: Request,
     settings: Settings = Depends(settings_dep),
 ) -> HTMLResponse:
-    # Group by family so the library renders as sectioned cards; selection
-    # is still a flat checkbox group, so cross-category mixing works.
     info_map = {name: algo_info(name) for name in REGISTRY}
     family_order = ["baseline", "statistical", "ml", "deep-learning"]
     grouped: dict[str, list[str]] = {f: [] for f in family_order}
@@ -1327,6 +1325,28 @@ def manage_training_page(
         for fam in [*family_order, "other"]
         if grouped.get(fam)
     ]
+
+    # Compute "this algo is enabled but won't actually train anywhere"
+    # so the algorithm-library cards can flag the trap the user just fell into.
+    enabled_set = set(settings.algorithms.enabled)
+    all_metrics = list(settings.metrics_to_forecast.queries.keys())
+    metrics_for_algo: dict[str, list[str]] = {a: [] for a in REGISTRY}
+    metrics_with_shortlist = set(settings.algorithms.per_metric.keys())
+    for m, shortlist in settings.algorithms.per_metric.items():
+        for a in shortlist:
+            metrics_for_algo.setdefault(a, []).append(m)
+    # A metric without an explicit shortlist falls back to algorithms.enabled,
+    # so every enabled algo trains on it.
+    metrics_without_shortlist = [m for m in all_metrics if m not in metrics_with_shortlist]
+    will_not_train: dict[str, bool] = {}
+    for a in REGISTRY:
+        if a not in enabled_set:
+            will_not_train[a] = False
+            continue
+        will_not_train[a] = (
+            not metrics_for_algo.get(a) and not metrics_without_shortlist
+        )
+
     return templates.TemplateResponse(
         request, "manage_training.html",
         {
@@ -1339,7 +1359,12 @@ def manage_training_page(
             "algo_info": info_map,
             "grouped_sections": grouped_sections,
             "total_registered": len(REGISTRY),
-            "total_enabled": len(set(settings.algorithms.enabled) & set(REGISTRY)),
+            "total_enabled": len(enabled_set & set(REGISTRY)),
+            "metrics_for_algo": metrics_for_algo,
+            "will_not_train": will_not_train,
+            "all_metrics": all_metrics,
+            "per_metric": settings.algorithms.per_metric,
+            "metrics_without_shortlist": metrics_without_shortlist,
         },
     )
 
@@ -1356,58 +1381,106 @@ def _set_or_delete(repo: RegistryRepo, key: str, raw: str, parser):
 
 
 @router.post("/manage/training/save", name="ui_manage_training_save")
-def manage_training_save(
+async def manage_training_save(
     request: Request,
-    lookback_days: str = Form(""),
-    backtest_folds: str = Form(""),
-    workers: str = Form(""),
-    algos_per_job: str = Form(""),
-    confidence_alpha: str = Form(""),
-    weight_mae: str = Form(""),
-    weight_rmse: str = Form(""),
-    weight_mape: str = Form(""),
-    weight_smape: str = Form(""),
-    weight_r2: str = Form(""),
-    enabled_algos: list[str] = Form(default=[]),
-    anomaly_filter_enabled: str | None = Form(None),
-    anomaly_contamination: str = Form(""),
-    anomaly_window: str = Form(""),
     repo: RegistryRepo = Depends(repo_dep),
+    settings: Settings = Depends(settings_dep),
 ) -> RedirectResponse:
-    _set_or_delete(repo, "training.lookback_days", lookback_days, int)
-    _set_or_delete(repo, "training.backtest_folds", backtest_folds, int)
-    _set_or_delete(repo, "training.parallelism.workers", workers, int)
-    _set_or_delete(repo, "training.parallelism.algos_per_job", algos_per_job, int)
-    _set_or_delete(repo, "training.confidence_alpha", confidence_alpha, float)
+    """Persist Manage → Training edits.
+
+    Hand-parses the form so multi-value fields (`enabled_algos`,
+    `per_metric__<metric>`) come through as lists. Also auto-prunes
+    per_metric shortlists when the enabled set changes so the pydantic
+    subset-invariant doesn't silently reject the override.
+    """
+    form = await request.form()
+
+    def _g(key: str, default: str = "") -> str:
+        v = form.get(key)
+        return v if isinstance(v, str) else default
+
+    _set_or_delete(repo, "training.lookback_days", _g("lookback_days"), int)
+    _set_or_delete(repo, "training.backtest_folds", _g("backtest_folds"), int)
+    _set_or_delete(repo, "training.parallelism.workers", _g("workers"), int)
+    _set_or_delete(repo, "training.parallelism.algos_per_job", _g("algos_per_job"), int)
+    _set_or_delete(repo, "training.confidence_alpha", _g("confidence_alpha"), float)
+
     weights = {
-        "mae": weight_mae, "rmse": weight_rmse, "mape": weight_mape,
-        "smape": weight_smape, "r2": weight_r2,
+        "mae": _g("weight_mae"), "rmse": _g("weight_rmse"),
+        "mape": _g("weight_mape"), "smape": _g("weight_smape"),
+        "r2": _g("weight_r2"),
     }
     if any(v.strip() for v in weights.values()):
         try:
             parsed = {k: float(v) for k, v in weights.items() if v.strip()}
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=f"weights: {exc}") from exc
-        if parsed:
-            # Persist as a single dotted-path-per-key set so we can clear individually.
-            for k, v in parsed.items():
-                repo.set_settings_override(f"ranking.weights.{k}", v)
-    # Enabled algorithms
+        for k, v in parsed.items():
+            repo.set_settings_override(f"ranking.weights.{k}", v)
+
+    # Enabled algorithms ----------------------------------------------------
+    enabled_algos = form.getlist("enabled_algos") if hasattr(form, "getlist") else []
     if enabled_algos:
-        # Restrict to registered names
         unknown = [a for a in enabled_algos if a not in REGISTRY]
         if unknown:
             raise HTTPException(status_code=400, detail=f"unknown algos: {unknown}")
         repo.set_settings_override("algorithms.enabled", list(enabled_algos))
+        enabled_set: set[str] = set(enabled_algos)
+    else:
+        enabled_set = set(settings.algorithms.enabled)
 
-    # Anomaly-filter preprocessing toggle
+    # Per-metric shortlists ------------------------------------------------
+    # The template posts one `per_metric__<metric>` checkbox group per metric.
+    # An entirely-unchecked group clears the override for that metric (= "use
+    # algorithms.enabled directly"); a non-empty group becomes the shortlist.
+    submitted_per_metric: dict[str, list[str]] = {}
+    any_per_metric_field = False
+    for key in form.keys():
+        if not key.startswith("per_metric__"):
+            continue
+        any_per_metric_field = True
+        metric = key.removeprefix("per_metric__")
+        values = form.getlist(key) if hasattr(form, "getlist") else []
+        clean = [v for v in values if v in REGISTRY and v in enabled_set]
+        if clean:
+            submitted_per_metric[metric] = clean
+    if any_per_metric_field:
+        # The form rendered at least one per_metric grid → treat its state as
+        # authoritative. Auto-prune merges in: any metric whose grid wasn't
+        # rendered is left alone.
+        new_per_metric = dict(settings.algorithms.per_metric)
+        # Anything that was on the form but is now empty means "clear the
+        # shortlist for that metric" → drop the key entirely so the loader
+        # falls back to algorithms.enabled.
+        for key in form.keys():
+            if key.startswith("per_metric__"):
+                metric = key.removeprefix("per_metric__")
+                new_per_metric.pop(metric, None)
+        new_per_metric.update(submitted_per_metric)
+    else:
+        new_per_metric = dict(settings.algorithms.per_metric)
+
+    # Auto-prune: drop any shortlist member that's no longer in enabled_set
+    # so the pydantic subset-invariant doesn't reject the override.
+    pruned = {
+        m: [a for a in algos if a in enabled_set]
+        for m, algos in new_per_metric.items()
+    }
+    pruned = {m: algos for m, algos in pruned.items() if algos}
+
+    if pruned:
+        repo.set_settings_override("algorithms.per_metric", pruned)
+    else:
+        repo.delete_settings_override("algorithms.per_metric")
+
+    # Anomaly-filter preprocessing toggle ----------------------------------
     repo.set_settings_override(
-        "training.anomaly_filter.enabled", anomaly_filter_enabled is not None
+        "training.anomaly_filter.enabled", _g("anomaly_filter_enabled") != ""
     )
     _set_or_delete(repo, "training.anomaly_filter.contamination",
-                   anomaly_contamination, float)
+                   _g("anomaly_contamination"), float)
     _set_or_delete(repo, "training.anomaly_filter.window",
-                   anomaly_window, int)
+                   _g("anomaly_window"), int)
 
     _invalidate()
     return RedirectResponse(url=str(request.url_for("ui_manage_training")), status_code=303)
