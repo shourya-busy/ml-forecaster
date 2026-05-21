@@ -67,12 +67,14 @@ class NeuralProphetForecaster(BaseForecaster):
         # PyTorch 2.6+ defaults torch.load(weights_only=True). PL's LR-finder
         # writes a checkpoint mid-fit then loads it back, and that checkpoint
         # contains NeuralProphet config dataclasses (ConfigSeasonality etc.)
-        # which aren't in torch's safe-globals allowlist. We're loading a
-        # checkpoint we wrote two seconds ago in-process, so weights_only=False
-        # is safe. Patch torch.load for the duration of m.fit() only.
+        # which aren't in torch's safe-globals allowlist. PL passes
+        # `weights_only=True` *explicitly* as a kwarg, so setdefault is a
+        # no-op — we have to force-override. We're loading a checkpoint
+        # we wrote two seconds ago in-process, so weights_only=False is safe.
+        # Patch torch.load for the duration of m.fit() only.
         _orig_torch_load = torch.load
         def _trusted_load(*a, **kw):
-            kw.setdefault("weights_only", False)
+            kw["weights_only"] = False
             return _orig_torch_load(*a, **kw)
         torch.load = _trusted_load
         try:
