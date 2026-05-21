@@ -37,6 +37,41 @@ fc.refreshStamp = () => {
 document.addEventListener("DOMContentLoaded", fc.refreshStamp);
 document.addEventListener("htmx:afterSwap", fc.refreshStamp);
 
+// Mobile sidebar toggle
+fc.toggleSidebar = () => {
+  const s = document.querySelector(".sidebar");
+  if (s) s.classList.toggle("is-open");
+};
+document.addEventListener("DOMContentLoaded", () => {
+  const btn = document.querySelector(".sidebar-toggle");
+  if (btn) btn.addEventListener("click", fc.toggleSidebar);
+  // Close sidebar on click outside (mobile only)
+  document.addEventListener("click", (ev) => {
+    const s = document.querySelector(".sidebar");
+    if (!s || !s.classList.contains("is-open")) return;
+    if (s.contains(ev.target) || (btn && btn.contains(ev.target))) return;
+    s.classList.remove("is-open");
+  });
+});
+
+// Tab switcher — any [data-tabs] container with .tab + .tab-panel children.
+// The tab has data-tab="<id>" and the panel has id="<id>".
+fc.initTabs = () => {
+  document.querySelectorAll("[data-tabs]").forEach((root) => {
+    const buttons = root.querySelectorAll(".tab");
+    const panels = root.querySelectorAll(".tab-panel");
+    buttons.forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const target = btn.dataset.tab;
+        buttons.forEach((b) => b.classList.toggle("is-active", b === btn));
+        panels.forEach((p) => p.classList.toggle("is-active", p.id === target));
+        if (typeof fc.onTabShown === "function") fc.onTabShown(target);
+      });
+    });
+  });
+};
+document.addEventListener("DOMContentLoaded", fc.initTabs);
+
 // Color palette for charts — keep in sync across plots so a given algo
 // has a consistent line across pages.
 fc.colors = {
@@ -58,12 +93,12 @@ fc.commonChartOptions = (yLabel) => ({
   maintainAspectRatio: false,
   interaction: { mode: "nearest", intersect: false },
   scales: {
-    x: { ticks: { color: "#94a3b8" }, grid: { color: "rgba(255,255,255,.05)" } },
-    y: { ticks: { color: "#94a3b8" }, grid: { color: "rgba(255,255,255,.05)" },
-         title: { display: !!yLabel, text: yLabel || "", color: "#94a3b8" } },
+    x: { ticks: { color: "#93a0bd" }, grid: { color: "rgba(255,255,255,.05)" } },
+    y: { ticks: { color: "#93a0bd" }, grid: { color: "rgba(255,255,255,.05)" },
+         title: { display: !!yLabel, text: yLabel || "", color: "#93a0bd" } },
   },
   plugins: {
     legend: { labels: { color: "#cbd5e1" } },
-    tooltip: { backgroundColor: "#0b1220", borderColor: "#334155", borderWidth: 1 },
+    tooltip: { backgroundColor: "#07101e", borderColor: "#2a3656", borderWidth: 1 },
   },
 });

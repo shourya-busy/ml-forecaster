@@ -176,8 +176,8 @@ def test_runs_page_and_detail(tmp_path: Path, monkeypatch):
     assert "Per-algo scores" in body
     assert "Config snapshot" in body
     assert "RANK" in body and "DUR" in body
-    # Winner pill present
-    assert 'pill good">ets' in body
+    # Winner pill present (class names use the BEM-style pill-good modifier)
+    assert 'pill-good">ets' in body
 
 
 def test_run_detail_404(tmp_path: Path, monkeypatch):

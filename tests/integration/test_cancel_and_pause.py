@@ -136,7 +136,8 @@ def test_overview_shows_paused_banner(tmp_path, monkeypatch):
     repo.set_training_paused(True)
     client = _client()
     body = client.get("/ui/").text
-    assert "PAUSED" in body
+    # Notice + sidebar status both reflect the paused state
+    assert "Training paused" in body
     # Resume button visible when paused
     assert "Start all training" in body
 

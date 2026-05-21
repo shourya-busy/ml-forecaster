@@ -1,137 +1,154 @@
 {% extends "base.html" %}
-{% block title %}Manage training{% endblock %}
+{% block title %}Settings · Training{% endblock %}
+{% block crumbs %}
+  Settings <span class="crumb-sep">/</span> <span class="crumb-current">Training</span>
+{% endblock %}
 {% block content %}
-<h1>Manage training</h1>
-<p class="subtitle">Tweak training behaviour without editing YAML. Leave a field blank to clear the override and fall back to YAML / env defaults.</p>
+<div class="page-header">
+  <div class="page-header-text">
+    <h1>Manage training</h1>
+    <p class="subtitle">Tweak training behaviour without editing YAML. Leave a field blank to clear the override and fall back to YAML / env defaults. Changes take effect on the next training run (~60s).</p>
+  </div>
+</div>
 
-{% include "_manage_subnav.html" %}
+<form method="post" action="{{ url_for('ui_manage_training_save') }}" style="display: grid; gap: var(--space-5); max-width: 920px">
 
-<form method="post" action="{{ url_for('ui_manage_training_save') }}" style="display: grid; gap: 20px; max-width: 760px">
-
-  <fieldset style="border: 1px solid var(--border); padding: 14px; border-radius: 6px">
-    <legend>&nbsp;Training limits&nbsp;</legend>
-    <div class="grid" style="grid-template-columns: 1fr 1fr">
-      <label>Lookback days <span class="sub">(history fetched per run; current: {{ training.lookback_days }})</span>
-        <input type="number" min="1" max="365" name="lookback_days" placeholder="{{ training.lookback_days }}" style="width: 100%; background: var(--panel); color: var(--text); border: 1px solid var(--border); padding: 6px; border-radius: 4px"></label>
-      <label>Backtest folds <span class="sub">(current: {{ training.backtest_folds }})</span>
-        <input type="number" min="1" max="20" name="backtest_folds" placeholder="{{ training.backtest_folds }}" style="width: 100%; background: var(--panel); color: var(--text); border: 1px solid var(--border); padding: 6px; border-radius: 4px"></label>
-      <label>Celery worker concurrency <span class="sub">(current: {{ training.parallelism.workers }})</span>
-        <input type="number" min="1" max="32" name="workers" placeholder="{{ training.parallelism.workers }}" style="width: 100%; background: var(--panel); color: var(--text); border: 1px solid var(--border); padding: 6px; border-radius: 4px"></label>
-      <label>Algos per job (in-thread parallelism) <span class="sub">(current: {{ training.parallelism.algos_per_job }})</span>
-        <input type="number" min="1" max="16" name="algos_per_job" placeholder="{{ training.parallelism.algos_per_job }}" style="width: 100%; background: var(--panel); color: var(--text); border: 1px solid var(--border); padding: 6px; border-radius: 4px"></label>
-      <label>Confidence alpha <span class="sub">(0.05 = 95% interval; current: {{ training.confidence_alpha }})</span>
-        <input type="number" step="0.01" min="0.01" max="0.5" name="confidence_alpha" placeholder="{{ training.confidence_alpha }}" style="width: 100%; background: var(--panel); color: var(--text); border: 1px solid var(--border); padding: 6px; border-radius: 4px"></label>
+  <fieldset class="fs">
+    <legend>Training limits</legend>
+    <div class="field-grid">
+      <label class="field">
+        <span class="field-label">Lookback days <span class="sub">(current: {{ training.lookback_days }})</span></span>
+        <input type="number" min="1" max="365" name="lookback_days" placeholder="{{ training.lookback_days }}">
+      </label>
+      <label class="field">
+        <span class="field-label">Backtest folds <span class="sub">(current: {{ training.backtest_folds }})</span></span>
+        <input type="number" min="1" max="20" name="backtest_folds" placeholder="{{ training.backtest_folds }}">
+      </label>
+      <label class="field">
+        <span class="field-label">Celery worker concurrency <span class="sub">(current: {{ training.parallelism.workers }})</span></span>
+        <input type="number" min="1" max="32" name="workers" placeholder="{{ training.parallelism.workers }}">
+      </label>
+      <label class="field">
+        <span class="field-label">Algos per job <span class="sub">(current: {{ training.parallelism.algos_per_job }})</span></span>
+        <input type="number" min="1" max="16" name="algos_per_job" placeholder="{{ training.parallelism.algos_per_job }}">
+      </label>
+      <label class="field">
+        <span class="field-label">Confidence alpha <span class="sub">(0.05 = 95%; current: {{ training.confidence_alpha }})</span></span>
+        <input type="number" step="0.01" min="0.01" max="0.5" name="confidence_alpha" placeholder="{{ training.confidence_alpha }}">
+      </label>
     </div>
   </fieldset>
 
-  <fieldset style="border: 1px solid var(--border); padding: 14px; border-radius: 6px">
-    <legend>&nbsp;Ranking weights&nbsp;</legend>
-    <p class="sub">Weights should sum to ~1.0. Leave blank to keep the current value.</p>
-    <div class="grid" style="grid-template-columns: repeat(5, 1fr)">
+  <fieldset class="fs">
+    <legend>Ranking weights</legend>
+    <p class="fs-help">Weights should sum to ~1.0. Leave blank to keep the current value.</p>
+    <div class="field-grid" style="grid-template-columns: repeat(5, 1fr)">
     {% for m in ['mae','rmse','mape','smape','r2'] %}
-      <label>{{ m|upper }} <span class="sub">(current: {{ ranking.weights.get(m, 0) }})</span>
-        <input type="number" step="0.01" min="0" max="1" name="weight_{{ m }}" placeholder="{{ ranking.weights.get(m, 0) }}" style="width: 100%; background: var(--panel); color: var(--text); border: 1px solid var(--border); padding: 6px; border-radius: 4px"></label>
+      <label class="field">
+        <span class="field-label">{{ m|upper }} <span class="sub">({{ ranking.weights.get(m, 0) }})</span></span>
+        <input type="number" step="0.01" min="0" max="1" name="weight_{{ m }}" placeholder="{{ ranking.weights.get(m, 0) }}">
+      </label>
     {% endfor %}
     </div>
   </fieldset>
 
-  <fieldset style="border: 1px solid var(--border); padding: 14px; border-radius: 6px">
-    <legend>&nbsp;Algorithm library &nbsp;<span class="sub" id="algo-counter">({{ total_enabled }} of {{ total_registered }} enabled)</span>&nbsp;</legend>
-    <p class="sub">
-      Algorithms are grouped by family. Tick any combination — selection is global, so you can mix and match across categories (e.g. one baseline + one statistical + one ML). Each enabled algo is auto-trained for every (server, metric, horizon), ranked, and the winner serves the forecast. Per-metric shortlists in <code>config/default.yaml::algorithms.per_metric</code> further narrow which compete for each metric.
+  <fieldset class="fs">
+    <legend>Algorithm library <span class="sub" id="algo-counter">({{ total_enabled }} of {{ total_registered }} enabled)</span></legend>
+    <p class="fs-help">
+      Algorithms are grouped by family. Tick any combination — selection is global, so you can mix and match across categories. Each enabled algo is auto-trained for every (server, metric, horizon), ranked, and the winner serves the forecast. Per-metric shortlists below further narrow which compete for each metric.
     </p>
 
-    <div class="filterbar" style="margin: 4px 0 12px">
-      <button class="btn secondary" type="button" onclick="algoBulk(true)">Enable all</button>
-      <button class="btn secondary" type="button" onclick="algoBulk(false)">Disable all</button>
-      <span class="sub" style="align-self: center">Bulk toggles only update the checkboxes — click Save all below to persist.</span>
+    <div class="toolbar" style="margin-bottom: var(--space-3)">
+      <button class="btn btn-secondary btn-sm" type="button" onclick="algoBulk(true)">Enable all</button>
+      <button class="btn btn-secondary btn-sm" type="button" onclick="algoBulk(false)">Disable all</button>
+      <span class="sub">Bulk toggles only update the checkboxes — click Save all below to persist.</span>
     </div>
 
     {% for fam, algos in grouped_sections %}
       {% set enabled_in_fam = (algos | select('in', algorithms.enabled) | list | length) %}
-      <h3 style="margin: 18px 0 8px; display: flex; align-items: center; gap: 8px">
+      <div class="algo-group-title">
         {% if fam == 'baseline' %}🎯 Baseline
         {% elif fam == 'statistical' %}📈 Statistical
         {% elif fam == 'ml' %}🌲 Machine learning
         {% elif fam == 'deep-learning' %}🧠 Deep learning
         {% else %}{{ fam }}{% endif %}
-        <span class="sub" style="font-weight: normal; font-size: 12px">({{ enabled_in_fam }} of {{ algos | length }} enabled)</span>
-        <button class="btn secondary" type="button" style="margin-left: auto; padding: 2px 8px; font-size: 11px"
-                onclick="algoBulkFamily({{ algos | tojson }}, true)">enable group</button>
-        <button class="btn secondary" type="button" style="padding: 2px 8px; font-size: 11px"
-                onclick="algoBulkFamily({{ algos | tojson }}, false)">disable group</button>
-      </h3>
-      <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 10px">
+        <span class="algo-group-count">({{ enabled_in_fam }} of {{ algos | length }} enabled)</span>
+        <span class="algo-group-actions">
+          <button class="btn btn-secondary btn-sm" type="button" onclick="algoBulkFamily({{ algos | tojson }}, true)">enable group</button>
+          <button class="btn btn-secondary btn-sm" type="button" onclick="algoBulkFamily({{ algos | tojson }}, false)">disable group</button>
+        </span>
+      </div>
+      <div class="field-grid" style="grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: var(--space-2)">
         {% for algo in algos %}
         {% set info = algo_info[algo] %}
-        <label class="card algo-card" data-algo="{{ algo }}" style="display: flex; gap: 10px; align-items: flex-start; cursor: pointer; {% if algo in algorithms.enabled %}border-color: var(--accent);{% endif %}">
-          <input type="checkbox" name="enabled_algos" value="{{ algo }}" data-algo="{{ algo }}" {% if algo in algorithms.enabled %}checked{% endif %} style="margin-top: 4px" onchange="algoStyle(this)">
-          <div style="flex: 1">
-            <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap">
+        <label class="algo-card {% if algo in algorithms.enabled %}is-selected{% endif %}" data-algo="{{ algo }}">
+          <input type="checkbox" name="enabled_algos" value="{{ algo }}" data-algo="{{ algo }}"
+                 {% if algo in algorithms.enabled %}checked{% endif %} onchange="algoStyle(this)">
+          <div class="algo-card-body">
+            <div class="algo-card-meta">
               <strong>{{ algo }}</strong>
-              <span class="pill muted" style="font-size: 10px">{{ info.family }}</span>
-              <span class="pill muted" style="font-size: 10px">{{ info.complexity }}</span>
-              <span class="pill muted" style="font-size: 10px">{{ info.speed }}</span>
+              <span class="pill pill-muted">{{ info.family }}</span>
+              <span class="pill pill-muted">{{ info.complexity }}</span>
+              <span class="pill pill-muted">{{ info.speed }}</span>
               {% if will_not_train.get(algo) %}
-              <span class="pill bad" style="font-size: 10px" title="Enabled but not present in any per-metric shortlist below — add it to at least one metric or clear that metric's shortlist for this algo to compete.">⚠ won't train</span>
+              <span class="pill pill-bad" title="Enabled but not present in any per-metric shortlist below — add it to at least one metric or clear that metric's shortlist for this algo to compete.">⚠ won't train</span>
               {% elif algo in algorithms.enabled and metrics_for_algo.get(algo) %}
-              <span class="pill good" style="font-size: 10px">trains on: {{ metrics_for_algo[algo] | join(', ') }}{% if metrics_without_shortlist %} + {{ metrics_without_shortlist | join(', ') }}{% endif %}</span>
+              <span class="pill pill-good">trains on: {{ metrics_for_algo[algo] | join(', ') }}{% if metrics_without_shortlist %} + {{ metrics_without_shortlist | join(', ') }}{% endif %}</span>
               {% elif algo in algorithms.enabled %}
-              <span class="pill good" style="font-size: 10px">trains on all metrics</span>
+              <span class="pill pill-good">trains on all metrics</span>
               {% endif %}
             </div>
-            <p class="sub" style="margin: 6px 0 4px">{{ info.description }}</p>
-            <p class="sub" style="margin: 0; color: var(--text); font-size: 12px"><strong>When:</strong> {{ info.when_to_use }}</p>
+            <p class="algo-card-desc">{{ info.description }}</p>
+            <p class="algo-card-desc"><strong>When:</strong> {{ info.when_to_use }}</p>
           </div>
         </label>
         {% endfor %}
       </div>
     {% endfor %}
 
-    <p class="sub" style="margin-top: 14px">
+    <p class="fs-help" style="margin-top: var(--space-3)">
       <strong>Why can't I add new algorithms from this page?</strong>
       Adding a model means executing new Python inside the worker — that's an arbitrary-code-execution surface and doesn't belong behind a web form. The {{ total_registered }} algorithms above span every major forecasting family. If you genuinely need another, add a file under <code>src/forecaster/models/</code>, decorate the class with <code>@register("name")</code>, and rebuild — it appears here automatically. See <code>docs/adding-an-algorithm.md</code>.
     </p>
   </fieldset>
 
-  <fieldset style="border: 1px solid var(--border); padding: 14px; border-radius: 6px">
-    <legend>&nbsp;Per-metric shortlists&nbsp;</legend>
-    <p class="sub">
+  <fieldset class="fs">
+    <legend>Per-metric shortlists</legend>
+    <p class="fs-help">
       Each tick below restricts which <em>enabled</em> algorithms compete for that specific metric.
-      <strong>Leave a metric's row entirely empty</strong> to disable the restriction for that metric — every enabled algorithm will then train on it. This is the gate that explains "I ticked auto_arima above but it's not training for CPU": auto_arima needs to be ticked here for CPU too, or the CPU shortlist needs to be cleared.
+      <strong>Leave a metric's row entirely empty</strong> to disable the restriction for that metric — every enabled algorithm will then train on it.
     </p>
-    <p class="sub" style="margin-bottom: 14px">
+    <p class="fs-help">
       Every registered algorithm is listed below. Cells for algorithms that aren't currently ticked in the library above are <em>greyed out</em> — tick the library checkbox and they become available in the same form (no save-reload cycle needed).
     </p>
 
     {% for metric in all_metrics %}
     {% set current = per_metric.get(metric, []) %}
     {% set has_restriction = metric in per_metric %}
-    <div style="margin-bottom: 16px; padding: 10px; border: 1px solid var(--border); border-radius: 6px">
-      <div style="display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 8px">
-        <strong style="font-size: 14px">{{ metric }}</strong>
+    <div style="margin-bottom: var(--space-4); padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius)">
+      <div style="display: flex; align-items: baseline; gap: var(--space-2); flex-wrap: wrap; margin-bottom: var(--space-2)">
+        <strong>{{ metric }}</strong>
         {% if has_restriction %}
-        <span class="pill warn" style="font-size: 10px">restricted to {{ current | length }} algo(s)</span>
+        <span class="pill pill-warn">restricted to {{ current | length }} algo(s)</span>
         {% else %}
-        <span class="pill good" style="font-size: 10px">no restriction — every enabled algo trains</span>
+        <span class="pill pill-good">no restriction — every enabled algo trains</span>
         {% endif %}
-        <button type="button" class="btn secondary" style="padding: 2px 8px; font-size: 11px; margin-left: auto"
-                onclick="pmAll('{{ metric }}', true)">Select all enabled</button>
-        <button type="button" class="btn secondary" style="padding: 2px 8px; font-size: 11px"
-                onclick="pmAll('{{ metric }}', false)">Clear (= no restriction)</button>
+        <span class="algo-group-actions">
+          <button type="button" class="btn btn-secondary btn-sm" onclick="pmAll('{{ metric }}', true)">Select all enabled</button>
+          <button type="button" class="btn btn-secondary btn-sm" onclick="pmAll('{{ metric }}', false)">Clear (= no restriction)</button>
+        </span>
       </div>
-      <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 4px">
+      <div class="field-grid" style="grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 4px">
         {% for algo in all_algos %}
         {% set is_enabled = algo in algorithms.enabled %}
-        <label class="pm-cell{% if not is_enabled %} pm-disabled{% endif %}"
+        <label class="pm-cell {% if not is_enabled %}pm-disabled{% endif %}"
                data-algo="{{ algo }}"
-               title="{% if not is_enabled %}Tick {{ algo }} in the algorithm library above to make this selectable.{% endif %}"
-               style="display: flex; align-items: center; gap: 6px; padding: 4px 8px; background: var(--panel-2); border-radius: 4px; cursor: pointer{% if not is_enabled %}; opacity: 0.45; cursor: not-allowed{% endif %}">
+               title="{% if not is_enabled %}Tick {{ algo }} in the algorithm library above to make this selectable.{% endif %}">
           <input type="checkbox" name="per_metric__{{ metric }}" value="{{ algo }}"
                  data-metric="{{ metric }}" data-algo="{{ algo }}"
                  {% if algo in current %}checked{% endif %}
                  {% if not is_enabled %}disabled{% endif %}>
-          <span style="font-size: 12px">{{ algo }}</span>
+          <span>{{ algo }}</span>
         </label>
         {% endfor %}
       </div>
@@ -139,57 +156,9 @@
     {% endfor %}
   </fieldset>
 
-  <script>
-  function syncPmAvailability(algo, enabled) {
-    document.querySelectorAll(`label.pm-cell[data-algo="${algo}"]`).forEach(lbl => {
-      const cb = lbl.querySelector("input[type=checkbox]");
-      if (enabled) {
-        lbl.classList.remove("pm-disabled");
-        lbl.style.opacity = "";
-        lbl.style.cursor = "pointer";
-        lbl.title = "";
-        if (cb) cb.disabled = false;
-      } else {
-        lbl.classList.add("pm-disabled");
-        lbl.style.opacity = "0.45";
-        lbl.style.cursor = "not-allowed";
-        lbl.title = `Tick ${algo} in the algorithm library above to make this selectable.`;
-        if (cb) { cb.disabled = true; cb.checked = false; }
-      }
-    });
-  }
-  function algoStyle(cb) {
-    const card = cb.closest(".algo-card");
-    card.style.borderColor = cb.checked ? "var(--accent)" : "var(--border)";
-    updateAlgoCounter();
-    syncPmAvailability(cb.value, cb.checked);
-  }
-  function algoBulk(state) {
-    document.querySelectorAll("input[name=enabled_algos]").forEach(cb => {
-      cb.checked = state; algoStyle(cb);
-    });
-  }
-  function algoBulkFamily(names, state) {
-    const set = new Set(names);
-    document.querySelectorAll("input[name=enabled_algos]").forEach(cb => {
-      if (set.has(cb.value)) { cb.checked = state; algoStyle(cb); }
-    });
-  }
-  function updateAlgoCounter() {
-    const total = document.querySelectorAll("input[name=enabled_algos]").length;
-    const on = document.querySelectorAll("input[name=enabled_algos]:checked").length;
-    const el = document.getElementById("algo-counter");
-    if (el) el.textContent = `(${on} of ${total} enabled)`;
-  }
-  function pmAll(metric, state) {
-    const sel = `input[name="per_metric__${metric}"]:not([disabled])`;
-    document.querySelectorAll(sel).forEach(cb => { cb.checked = state; });
-  }
-  </script>
-
-  <fieldset style="border: 1px solid var(--border); padding: 14px; border-radius: 6px">
-    <legend>&nbsp;Outlier filtering (preprocessing)&nbsp;</legend>
-    <p class="sub">
+  <fieldset class="fs">
+    <legend>Outlier filtering (preprocessing)</legend>
+    <p class="fs-help">
       Optionally drop anomalous points from the training history before fitting models,
       so a deployment spike or monitoring blip doesn't pull the forecast off-trend.
       Uses scikit-learn's <strong>Isolation Forest</strong> on sliding-window features.
@@ -197,29 +166,73 @@
       not produce future-value predictions; that's why it's here and not in the
       Algorithm library above.</em>
     </p>
-    <div class="grid" style="grid-template-columns: 1fr 1fr 1fr; gap: 14px">
-      <label style="display: flex; align-items: center; gap: 8px">
+    <div class="field-grid">
+      <label class="field-inline">
         <input type="checkbox" name="anomaly_filter_enabled"
                {% if training.anomaly_filter.enabled %}checked{% endif %}>
         <span><strong>Enable</strong> outlier filtering</span>
       </label>
-      <label>Expected contamination
-        <span class="sub">(0.001 – 0.5; current: {{ training.anomaly_filter.contamination }})</span>
+      <label class="field">
+        <span class="field-label">Expected contamination <span class="sub">(0.001 – 0.5; current: {{ training.anomaly_filter.contamination }})</span></span>
         <input type="number" step="0.005" min="0.001" max="0.5"
                name="anomaly_contamination"
-               placeholder="{{ training.anomaly_filter.contamination }}"
-               style="width: 100%; background: var(--panel); color: var(--text); border: 1px solid var(--border); padding: 6px; border-radius: 4px"></label>
-      <label>Window size
-        <span class="sub">(lag-vector length; current: {{ training.anomaly_filter.window }})</span>
+               placeholder="{{ training.anomaly_filter.contamination }}">
+      </label>
+      <label class="field">
+        <span class="field-label">Window size <span class="sub">(current: {{ training.anomaly_filter.window }})</span></span>
         <input type="number" min="1" max="500" name="anomaly_window"
-               placeholder="{{ training.anomaly_filter.window }}"
-               style="width: 100%; background: var(--panel); color: var(--text); border: 1px solid var(--border); padding: 6px; border-radius: 4px"></label>
+               placeholder="{{ training.anomaly_filter.window }}">
+      </label>
     </div>
   </fieldset>
 
-  <div>
+  <div class="page-actions">
     <button class="btn" type="submit">Save all</button>
     <span class="sub">changes take effect on the next training run (~60s)</span>
   </div>
 </form>
+
+<script>
+function syncPmAvailability(algo, enabled) {
+  document.querySelectorAll(`label.pm-cell[data-algo="${algo}"]`).forEach(lbl => {
+    const cb = lbl.querySelector("input[type=checkbox]");
+    if (enabled) {
+      lbl.classList.remove("pm-disabled");
+      lbl.title = "";
+      if (cb) cb.disabled = false;
+    } else {
+      lbl.classList.add("pm-disabled");
+      lbl.title = `Tick ${algo} in the algorithm library above to make this selectable.`;
+      if (cb) { cb.disabled = true; cb.checked = false; }
+    }
+  });
+}
+function algoStyle(cb) {
+  const card = cb.closest(".algo-card");
+  card.classList.toggle("is-selected", cb.checked);
+  updateAlgoCounter();
+  syncPmAvailability(cb.value, cb.checked);
+}
+function algoBulk(state) {
+  document.querySelectorAll("input[name=enabled_algos]").forEach(cb => {
+    cb.checked = state; algoStyle(cb);
+  });
+}
+function algoBulkFamily(names, state) {
+  const set = new Set(names);
+  document.querySelectorAll("input[name=enabled_algos]").forEach(cb => {
+    if (set.has(cb.value)) { cb.checked = state; algoStyle(cb); }
+  });
+}
+function updateAlgoCounter() {
+  const total = document.querySelectorAll("input[name=enabled_algos]").length;
+  const on = document.querySelectorAll("input[name=enabled_algos]:checked").length;
+  const el = document.getElementById("algo-counter");
+  if (el) el.textContent = `(${on} of ${total} enabled)`;
+}
+function pmAll(metric, state) {
+  const sel = `input[name="per_metric__${metric}"]:not([disabled])`;
+  document.querySelectorAll(sel).forEach(cb => { cb.checked = state; });
+}
+</script>
 {% endblock %}

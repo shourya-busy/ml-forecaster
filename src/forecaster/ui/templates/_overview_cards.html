@@ -1,42 +1,42 @@
-<div class="grid">
-  <div class="card">
-    <div class="label">Targets tracked</div>
-    <div class="value">{{ stats.unique_targets }}</div>
-    <div class="sub">instance × metric × horizon</div>
+<div class="kpi-grid">
+  <div class="kpi-card">
+    <div class="kpi-label">Targets tracked</div>
+    <div class="kpi-value">{{ stats.unique_targets }}</div>
+    <div class="kpi-sub">instance × metric × horizon</div>
   </div>
-  <div class="card">
-    <div class="label">Distinct instances</div>
-    <div class="value">{{ stats.unique_instances }}</div>
-    <div class="sub">{{ stats.unique_metrics }} metrics · {{ stats.unique_horizons }} horizons</div>
+  <div class="kpi-card">
+    <div class="kpi-label">Distinct instances</div>
+    <div class="kpi-value">{{ stats.unique_instances }}</div>
+    <div class="kpi-sub">{{ stats.unique_metrics }} metrics · {{ stats.unique_horizons }} horizons</div>
   </div>
-  <div class="card">
-    <div class="label">Completed runs (24h)</div>
-    <div class="value">{{ stats.runs_24h }}</div>
-    <div class="sub">{{ stats.runs_total }} total</div>
+  <div class="kpi-card">
+    <div class="kpi-label">Completed runs (24h)</div>
+    <div class="kpi-value">{{ stats.runs_24h }}</div>
+    <div class="kpi-sub">{{ stats.runs_total }} total</div>
   </div>
-  <div class="card">
-    <div class="label">In-flight</div>
-    <div class="value">{{ stats.running_now }}</div>
-    <div class="sub">running or pending</div>
+  <div class="kpi-card">
+    <div class="kpi-label">In-flight</div>
+    <div class="kpi-value">{{ stats.running_now }}</div>
+    <div class="kpi-sub">running or pending</div>
   </div>
-  <div class="card">
-    <div class="label">Failed runs (24h)</div>
-    <div class="value" style="color: {% if stats.failed_24h > 0 %}var(--bad){% else %}var(--good){% endif %}">{{ stats.failed_24h }}</div>
-    <div class="sub">{% if stats.failed_24h == 0 %}all good{% else %}see Runs tab{% endif %}</div>
+  <div class="kpi-card">
+    <div class="kpi-label">Failed runs (24h)</div>
+    <div class="kpi-value {% if stats.failed_24h > 0 %}is-bad{% else %}is-good{% endif %}">{{ stats.failed_24h }}</div>
+    <div class="kpi-sub">{% if stats.failed_24h == 0 %}all good{% else %}see Runs tab{% endif %}</div>
   </div>
-  <div class="card">
-    <div class="label">Flapping targets</div>
-    <div class="value" style="color: {% if stats.flapping > 0 %}var(--warn){% else %}var(--good){% endif %}">{{ stats.flapping }}</div>
-    <div class="sub">≥3 unique winners recent</div>
+  <div class="kpi-card">
+    <div class="kpi-label">Flapping targets</div>
+    <div class="kpi-value {% if stats.flapping > 0 %}is-warning{% else %}is-good{% endif %}">{{ stats.flapping }}</div>
+    <div class="kpi-sub">≥3 unique winners recent</div>
   </div>
-  <div class="card">
-    <div class="label">Models registered</div>
-    <div class="value">{{ stats.models_registered }}</div>
-    <div class="sub">{{ stats.models_enabled }} enabled</div>
+  <div class="kpi-card">
+    <div class="kpi-label">Models registered</div>
+    <div class="kpi-value">{{ stats.models_registered }}</div>
+    <div class="kpi-sub">{{ stats.models_enabled }} enabled</div>
   </div>
-  <div class="card">
-    <div class="label">Avg run duration</div>
-    <div class="value">{{ "%.1fs"|format(stats.avg_run_duration or 0) }}</div>
-    <div class="sub">last {{ stats.duration_sample_size }} runs</div>
+  <div class="kpi-card">
+    <div class="kpi-label">Avg run duration</div>
+    <div class="kpi-value">{{ "%.1fs"|format(stats.avg_run_duration or 0) }}</div>
+    <div class="kpi-sub">last {{ stats.duration_sample_size }} runs</div>
   </div>
 </div>

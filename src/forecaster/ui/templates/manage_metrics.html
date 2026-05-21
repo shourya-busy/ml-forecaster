@@ -1,49 +1,61 @@
 {% extends "base.html" %}
-{% block title %}Manage metrics{% endblock %}
+{% block title %}Settings · Metrics{% endblock %}
+{% block crumbs %}
+  Settings <span class="crumb-sep">/</span> <span class="crumb-current">Metrics</span>
+{% endblock %}
 {% block content %}
-<h1>Manage metrics</h1>
-<p class="subtitle">Add or edit PromQL queries that the forecaster trains against. "Test" runs the query as an instant query and reports how many instances came back.</p>
-
-{% include "_manage_subnav.html" %}
-
-<h2>Existing metrics</h2>
-<table>
-  <thead><tr><th>Name</th><th>PromQL</th><th></th></tr></thead>
-  <tbody>
-  {% for name, q in queries.items() %}
-    <tr>
-      <td><strong class="code">{{ name }}</strong></td>
-      <td><pre class="code-block" style="margin: 0; max-height: 100px; font-size: 12px">{{ q }}</pre></td>
-      <td style="white-space: nowrap">
-        <form method="post" action="{{ url_for('ui_manage_metrics_save') }}" style="display: inline-block">
-          <input type="hidden" name="name" value="{{ name }}">
-          <textarea name="query" rows="2" cols="40" style="background: var(--panel-2); color: var(--text); border: 1px solid var(--border); padding: 4px; font-family: ui-monospace, monospace; font-size: 11px; vertical-align: middle">{{ q }}</textarea>
-          <button class="btn" type="submit" style="padding: 4px 10px">Save edit</button>
-        </form>
-        <form method="post" action="{{ url_for('ui_manage_metrics_delete') }}" style="display: inline-block; margin-left: 4px"
-              onsubmit="return confirm('Clear override for {{ name }}? The YAML default (if any) will be restored.')">
-          <input type="hidden" name="name" value="{{ name }}">
-          <button class="btn secondary" type="submit" style="padding: 4px 10px">Clear override</button>
-        </form>
-      </td>
-    </tr>
-  {% endfor %}
-  </tbody>
-</table>
-
-<h2>Add a new metric</h2>
-<form method="post" action="{{ url_for('ui_manage_metrics_save') }}" style="display: grid; gap: 10px; max-width: 720px">
-  <label>Name <span class="sub">(snake_case, no dots — e.g. <code>cpu_user</code>, <code>iops</code>)</span>
-    <input type="text" name="name" required pattern="[a-zA-Z0-9_]+" style="width: 100%; background: var(--panel); color: var(--text); border: 1px solid var(--border); padding: 8px; border-radius: 6px"></label>
-  <label>PromQL
-    <textarea name="query" required rows="5" style="width: 100%; background: var(--panel); color: var(--text); border: 1px solid var(--border); padding: 8px; border-radius: 6px; font-family: ui-monospace, monospace; font-size: 13px"></textarea>
-  </label>
-  <div>
-    <button class="btn" type="submit">Save</button>
-    <button class="btn secondary" type="button" onclick="testQuery(this.form)">Test query</button>
-    <span id="test-result" class="sub" style="margin-left: 12px"></span>
+<div class="page-header">
+  <div class="page-header-text">
+    <h1>Manage metrics</h1>
+    <p class="subtitle">Add or edit PromQL queries that the forecaster trains against. "Test" runs the query as an instant query and reports how many instances came back. Edits write to the database and take effect within ~60s.</p>
   </div>
-</form>
+</div>
+
+<section class="section">
+  <h2>Existing metrics</h2>
+  <table class="table">
+    <thead><tr><th>Name</th><th>PromQL</th><th></th></tr></thead>
+    <tbody>
+    {% for name, q in queries.items() %}
+      <tr>
+        <td><strong class="code">{{ name }}</strong></td>
+        <td><pre class="code-block" style="margin: 0; max-height: 100px">{{ q }}</pre></td>
+        <td class="row-actions">
+          <form method="post" action="{{ url_for('ui_manage_metrics_save') }}" style="display: inline-block">
+            <input type="hidden" name="name" value="{{ name }}">
+            <textarea name="query" rows="2" cols="40" style="vertical-align: middle">{{ q }}</textarea>
+            <button class="btn btn-sm" type="submit">Save edit</button>
+          </form>
+          <form method="post" action="{{ url_for('ui_manage_metrics_delete') }}" style="display: inline-block"
+                onsubmit="return confirm('Clear override for {{ name }}? The YAML default (if any) will be restored.')">
+            <input type="hidden" name="name" value="{{ name }}">
+            <button class="btn btn-secondary btn-sm" type="submit">Clear override</button>
+          </form>
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+<section class="section">
+  <h2>Add a new metric</h2>
+  <form method="post" action="{{ url_for('ui_manage_metrics_save') }}" style="display: grid; gap: var(--space-3); max-width: 720px">
+    <label class="field">
+      <span class="field-label">Name <span class="sub">(snake_case, no dots — e.g. <code>cpu_user</code>, <code>iops</code>)</span></span>
+      <input type="text" name="name" required pattern="[a-zA-Z0-9_]+">
+    </label>
+    <label class="field">
+      <span class="field-label">PromQL</span>
+      <textarea name="query" required rows="5"></textarea>
+    </label>
+    <div class="page-actions">
+      <button class="btn" type="submit">Save</button>
+      <button class="btn btn-secondary" type="button" onclick="testQuery(this.form)">Test query</button>
+      <span id="test-result" class="sub"></span>
+    </div>
+  </form>
+</section>
 
 <script>
 async function testQuery(form) {
@@ -56,14 +68,14 @@ async function testQuery(form) {
     const r = await fetch("{{ url_for('ui_manage_metrics_test') }}", { method: 'POST', body });
     const j = await r.json();
     if (j.ok) {
-      out.style.color = 'var(--good)';
+      out.style.color = 'var(--success)';
       out.textContent = `✓ ${j.instance_count} instances: ${(j.sample_instances || []).slice(0, 5).join(', ')}`;
     } else {
-      out.style.color = 'var(--bad)';
+      out.style.color = 'var(--danger)';
       out.textContent = `✗ ${j.error}`;
     }
   } catch (e) {
-    out.style.color = 'var(--bad)';
+    out.style.color = 'var(--danger)';
     out.textContent = '✗ ' + e;
   }
 }

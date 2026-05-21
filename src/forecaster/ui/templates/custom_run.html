@@ -1,73 +1,84 @@
 {% extends "base.html" %}
 {% block title %}Custom Run{% endblock %}
 {% block content %}
-<h1>Custom Run</h1>
-<p class="subtitle">
-  Build any (instance × metric × horizon × algorithm-set × anomaly-filter) combination,
-  run it on demand, and save it as a named configuration to re-run later.
-  This bypasses the global scheduled cron — each click here fires <em>one</em> training job.
-</p>
+<div class="page-header">
+  <div class="page-header-text">
+    <h1>Custom Run</h1>
+    <p class="subtitle">
+      Build any (instance × metric × horizon × algorithm-set × anomaly-filter) combination,
+      run it on demand, and save it as a named configuration to re-run later.
+      This bypasses the global scheduled cron — each click here fires <em>one</em> training job.
+    </p>
+  </div>
+  <div class="page-actions">
+    <a class="btn btn-secondary" href="{{ url_for('ui_runs') }}">View all runs →</a>
+  </div>
+</div>
 
 {% if training_paused %}
-<div class="card" style="margin-bottom: 16px; border-color: var(--warn); background: rgba(234,179,8,.08)">
-  <strong style="color: var(--warn)">⏸ Scheduled training is paused</strong>
-  <span class="sub">— manual custom runs still work; they're explicit user actions.</span>
+<div class="notice notice-warn">
+  <div>
+    <div class="notice-title">⏸ Scheduled training is paused</div>
+    <span class="sub">Manual custom runs still work; they're explicit user actions.</span>
+  </div>
 </div>
 {% endif %}
 
-<form method="post" id="customForm" style="display: grid; gap: 16px">
+<form method="post" id="customForm" style="display: grid; gap: var(--space-4)">
 
-  <fieldset style="border: 1px solid var(--border); padding: 14px; border-radius: 6px">
-    <legend>&nbsp;Target&nbsp;</legend>
-    <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr))">
-      <label>Instance
-        <input type="text" name="instance" required list="instance-list"
-               placeholder="e.g. 172.16.24.155"
-               style="width: 100%; background: var(--panel); color: var(--text); border: 1px solid var(--border); padding: 6px 10px; border-radius: 6px">
+  <fieldset class="fs">
+    <legend>Target</legend>
+    <div class="field-grid">
+      <label class="field">
+        <span class="field-label">Instance</span>
+        <input type="text" name="instance" required list="instance-list" placeholder="e.g. 172.16.24.155">
         <datalist id="instance-list">
           {% for i in instances %}<option value="{{ i }}">{% endfor %}
         </datalist>
       </label>
-      <label>Metric
-        <select name="metric" required style="width: 100%">
+      <label class="field">
+        <span class="field-label">Metric</span>
+        <select name="metric" required>
           {% for m in metrics %}<option value="{{ m }}">{{ m }}</option>{% endfor %}
         </select>
       </label>
-      <label>Horizon
-        <select name="horizon" required style="width: 100%">
+      <label class="field">
+        <span class="field-label">Horizon</span>
+        <select name="horizon" required>
           {% for h in horizons %}<option value="{{ h }}">{{ h }}</option>{% endfor %}
         </select>
       </label>
     </div>
   </fieldset>
 
-  <fieldset style="border: 1px solid var(--border); padding: 14px; border-radius: 6px">
-    <legend>&nbsp;Algorithms&nbsp;<span class="sub" id="cr-algo-count">(0 selected)</span>&nbsp;</legend>
-    <p class="sub">Leave all unchecked to use the global enabled set (per-metric shortlist still applies). Tick to override for this run only.</p>
-    <div class="filterbar" style="margin: 4px 0 10px">
-      <button class="btn secondary" type="button" onclick="crBulk(true)">Select all</button>
-      <button class="btn secondary" type="button" onclick="crBulk(false)">Clear</button>
-      <button class="btn secondary" type="button" onclick="crUseDefault()">Use default-enabled</button>
+  <fieldset class="fs">
+    <legend>Algorithms <span class="sub" id="cr-algo-count">(0 selected)</span></legend>
+    <p class="fs-help">Leave all unchecked to use the global enabled set (per-metric shortlist still applies). Tick to override for this run only.</p>
+    <div class="toolbar" style="margin-bottom: var(--space-2)">
+      <button class="btn btn-secondary btn-sm" type="button" onclick="crBulk(true)">Select all</button>
+      <button class="btn btn-secondary btn-sm" type="button" onclick="crBulk(false)">Clear</button>
+      <button class="btn btn-secondary btn-sm" type="button" onclick="crUseDefault()">Use default-enabled</button>
     </div>
     {% for fam, algos in grouped_algos %}
-    <h3 style="margin: 12px 0 6px; font-size: 13px; color: var(--muted)">
+    <div class="algo-group-title">
       {% if fam == 'baseline' %}🎯 Baseline
       {% elif fam == 'statistical' %}📈 Statistical
       {% elif fam == 'ml' %}🌲 Machine learning
       {% elif fam == 'deep-learning' %}🧠 Deep learning
       {% else %}{{ fam }}{% endif %}
-    </h3>
-    <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 6px">
+      <span class="algo-group-count">({{ algos | length }})</span>
+    </div>
+    <div class="field-grid" style="grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: var(--space-2)">
       {% for algo in algos %}
       {% set info = algo_info[algo] %}
-      <label class="card" style="padding: 8px 10px; display: flex; align-items: flex-start; gap: 8px; cursor: pointer">
+      <label class="algo-card">
         <input type="checkbox" name="algorithms" value="{{ algo }}"
                data-default="{{ '1' if algo in default_enabled else '0' }}"
                onchange="crCount()">
-        <div style="flex: 1; min-width: 0">
-          <strong style="font-size: 13px">{{ algo }}</strong>
-          <span class="sub" style="font-size: 11px"> · {{ info.speed }}</span>
-          <p class="sub" style="margin: 2px 0 0; font-size: 11px">{{ info.description[:80] }}{% if info.description | length > 80 %}…{% endif %}</p>
+        <div class="algo-card-body">
+          <strong>{{ algo }}</strong>
+          <span class="sub"> · {{ info.speed }}</span>
+          <p class="algo-card-desc">{{ info.description[:80] }}{% if info.description | length > 80 %}…{% endif %}</p>
         </div>
       </label>
       {% endfor %}
@@ -75,114 +86,120 @@
     {% endfor %}
   </fieldset>
 
-  <fieldset style="border: 1px solid var(--border); padding: 14px; border-radius: 6px">
-    <legend>&nbsp;Outlier filtering&nbsp;</legend>
-    <div class="grid" style="grid-template-columns: 1fr 1fr 1fr; gap: 14px">
-      <label style="display: flex; gap: 8px; align-items: center">
+  <fieldset class="fs">
+    <legend>Outlier filtering</legend>
+    <div class="field-grid">
+      <label class="field-inline">
         <input type="checkbox" name="anomaly_enabled">
         <span>Enable Isolation Forest preprocessing for this run</span>
       </label>
-      <label>Contamination
+      <label class="field">
+        <span class="field-label">Contamination</span>
         <input type="number" step="0.005" min="0.001" max="0.5" name="anomaly_contamination"
-               placeholder="{{ anomaly_default.contamination }}"
-               style="width: 100%; background: var(--panel); color: var(--text); border: 1px solid var(--border); padding: 6px; border-radius: 4px"></label>
-      <label>Window
-        <input type="number" min="1" max="500" name="anomaly_window"
-               placeholder="{{ anomaly_default.window }}"
-               style="width: 100%; background: var(--panel); color: var(--text); border: 1px solid var(--border); padding: 6px; border-radius: 4px"></label>
+               placeholder="{{ anomaly_default.contamination }}">
+      </label>
+      <label class="field">
+        <span class="field-label">Window</span>
+        <input type="number" min="1" max="500" name="anomaly_window" placeholder="{{ anomaly_default.window }}">
+      </label>
     </div>
   </fieldset>
 
-  <fieldset style="border: 1px solid var(--border); padding: 14px; border-radius: 6px">
-    <legend>&nbsp;Save (optional)&nbsp;</legend>
-    <div class="grid" style="grid-template-columns: 1fr 2fr">
-      <label>Name <span class="sub">(unique; reusing an existing name updates it)</span>
-        <input type="text" name="name" placeholder="e.g. cpu_lstm_only_no_filter"
-               style="width: 100%; background: var(--panel); color: var(--text); border: 1px solid var(--border); padding: 6px 10px; border-radius: 6px"></label>
-      <label>Note <span class="sub">(why does this configuration exist?)</span>
-        <input type="text" name="note" placeholder="optional"
-               style="width: 100%; background: var(--panel); color: var(--text); border: 1px solid var(--border); padding: 6px 10px; border-radius: 6px"></label>
+  <fieldset class="fs">
+    <legend>Save (optional)</legend>
+    <div class="field-grid">
+      <label class="field">
+        <span class="field-label">Name <span class="sub">(unique; reusing an existing name updates it)</span></span>
+        <input type="text" name="name" placeholder="e.g. cpu_lstm_only_no_filter">
+      </label>
+      <label class="field">
+        <span class="field-label">Note <span class="sub">(why does this configuration exist?)</span></span>
+        <input type="text" name="note" placeholder="optional">
+      </label>
     </div>
   </fieldset>
 
-  <div style="display: flex; gap: 8px; flex-wrap: wrap">
+  <div class="page-actions">
     <button class="btn" type="submit" formaction="{{ url_for('ui_custom_run_run') }}">▶ Run now</button>
-    <button class="btn secondary" type="submit" formaction="{{ url_for('ui_custom_run_save') }}">Save only</button>
-    <button class="btn secondary" type="submit" formaction="{{ url_for('ui_custom_run_save_and_run') }}">Save & run</button>
-    <a class="btn secondary" href="{{ url_for('ui_runs') }}">View all runs →</a>
+    <button class="btn btn-secondary" type="submit" formaction="{{ url_for('ui_custom_run_save') }}">Save only</button>
+    <button class="btn btn-secondary" type="submit" formaction="{{ url_for('ui_custom_run_save_and_run') }}">Save &amp; run</button>
   </div>
 </form>
 
-<h2>Saved configurations</h2>
-{% if saved %}
-<table>
-  <thead>
-    <tr><th>Name</th><th>Target</th><th>Algorithms</th><th>Anomaly filter</th><th>Run count</th><th>Last used</th><th></th></tr>
-  </thead>
-  <tbody>
-  {% for s in saved %}
-    <tr>
-      <td><strong>{{ s.name }}</strong>{% if s.note %}<div class="sub">{{ s.note }}</div>{% endif %}</td>
-      <td class="code">{{ s.instance }} · {{ s.metric }} · {{ s.horizon }}</td>
-      <td class="sub">
-        {% if s.algorithms %}{{ s.algorithms | join(', ') }}{% else %}—{% endif %}
-      </td>
-      <td class="sub">
-        {% if s.anomaly_filter and s.anomaly_filter.enabled %}
-          on (c={{ s.anomaly_filter.contamination }}, w={{ s.anomaly_filter.window }})
-        {% else %}off{% endif %}
-      </td>
-      <td class="num">{{ s.run_count }}</td>
-      <td class="code">{{ s.last_used_at | to_local_short }}</td>
-      <td style="white-space: nowrap">
-        <form method="post" action="{{ url_for('ui_custom_run_run_saved', config_id=s.id) }}" style="display: inline">
-          <button class="btn" type="submit" style="padding: 4px 10px">▶ Run</button>
-        </form>
-        <form method="post" action="{{ url_for('ui_custom_run_delete', config_id=s.id) }}" style="display: inline"
-              onsubmit="return confirm('Delete saved config {{ s.name }}?')">
-          <button class="btn secondary" type="submit" style="padding: 4px 10px">Delete</button>
-        </form>
-      </td>
-    </tr>
-  {% endfor %}
-  </tbody>
-</table>
-{% else %}
-<p class="sub">No saved configurations yet. Fill the form above and click <strong>Save & run</strong> to create one.</p>
-{% endif %}
+<section class="section">
+  <h2>Saved configurations</h2>
+  {% if saved %}
+  <table class="table">
+    <thead>
+      <tr><th>Name</th><th>Target</th><th>Algorithms</th><th>Anomaly filter</th><th>Run count</th><th>Last used</th><th></th></tr>
+    </thead>
+    <tbody>
+    {% for s in saved %}
+      <tr>
+        <td><strong>{{ s.name }}</strong>{% if s.note %}<div class="sub">{{ s.note }}</div>{% endif %}</td>
+        <td class="code">{{ s.instance }} · {{ s.metric }} · {{ s.horizon }}</td>
+        <td class="sub">
+          {% if s.algorithms %}{{ s.algorithms | join(', ') }}{% else %}—{% endif %}
+        </td>
+        <td class="sub">
+          {% if s.anomaly_filter and s.anomaly_filter.enabled %}
+            on (c={{ s.anomaly_filter.contamination }}, w={{ s.anomaly_filter.window }})
+          {% else %}off{% endif %}
+        </td>
+        <td class="num">{{ s.run_count }}</td>
+        <td class="code">{{ s.last_used_at | to_local_short }}</td>
+        <td class="row-actions">
+          <form method="post" action="{{ url_for('ui_custom_run_run_saved', config_id=s.id) }}">
+            <button class="btn btn-sm" type="submit">▶ Run</button>
+          </form>
+          <form method="post" action="{{ url_for('ui_custom_run_delete', config_id=s.id) }}"
+                onsubmit="return confirm('Delete saved config {{ s.name }}?')">
+            <button class="btn btn-secondary btn-sm" type="submit">Delete</button>
+          </form>
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="sub">No saved configurations yet. Fill the form above and click <strong>Save &amp; run</strong> to create one.</p>
+  {% endif %}
+</section>
 
-<h2>Active runs <span class="sub">({{ active_runs | length }})</span></h2>
-<p class="subtitle">All currently-pending or running training jobs, regardless of where they were triggered. Cancel individually here or bulk-cancel from the Runs page.</p>
-{% if active_runs %}
-<table>
-  <thead><tr><th>ID</th><th>Target</th><th>Status</th><th>Started</th><th></th></tr></thead>
-  <tbody>
-  {% for r in active_runs %}
-    <tr>
-      <td><a href="{{ url_for('ui_run_detail', run_id=r.id) }}">#{{ r.id }}</a></td>
-      <td class="code">{{ r.instance }} · {{ r.metric }} · {{ r.horizon }}</td>
-      <td>
-        {% if r.status == 'running' %}<span class="pill warn">running</span>
-        {% else %}<span class="pill muted">{{ r.status }}</span>{% endif %}
-      </td>
-      <td class="code">{{ r.started_at | to_local_short }}</td>
-      <td>
-        <form method="post" action="{{ url_for('ui_cancel_run', run_id=r.id) }}" style="display: inline"
-              onsubmit="return confirm('Cancel run #{{ r.id }}?')">
-          <button class="btn" type="submit" style="padding: 4px 10px; background: var(--bad); color: white">Cancel</button>
-        </form>
-      </td>
-    </tr>
-  {% endfor %}
-  </tbody>
-</table>
-<form method="post" action="{{ url_for('ui_cancel_active_runs') }}" style="margin-top: 12px"
-      onsubmit="return confirm('Cancel ALL active runs?')">
-  <button class="btn" type="submit" style="background: var(--bad); color: white">Cancel all active</button>
-</form>
-{% else %}
-<p class="sub">No active runs.</p>
-{% endif %}
+<section class="section">
+  <h2>Active runs <span class="sub">({{ active_runs | length }})</span></h2>
+  <p class="subtitle">All currently-pending or running training jobs, regardless of where they were triggered. Cancel individually here or bulk-cancel from the Runs page.</p>
+  {% if active_runs %}
+  <table class="table">
+    <thead><tr><th>ID</th><th>Target</th><th>Status</th><th>Started</th><th></th></tr></thead>
+    <tbody>
+    {% for r in active_runs %}
+      <tr>
+        <td><a href="{{ url_for('ui_run_detail', run_id=r.id) }}">#{{ r.id }}</a></td>
+        <td class="code">{{ r.instance }} · {{ r.metric }} · {{ r.horizon }}</td>
+        <td>
+          {% if r.status == 'running' %}<span class="pill pill-warn">running</span>
+          {% else %}<span class="pill pill-muted">{{ r.status }}</span>{% endif %}
+        </td>
+        <td class="code">{{ r.started_at | to_local_short }}</td>
+        <td>
+          <form method="post" action="{{ url_for('ui_cancel_run', run_id=r.id) }}"
+                onsubmit="return confirm('Cancel run #{{ r.id }}?')">
+            <button class="btn btn-danger btn-sm" type="submit">Cancel</button>
+          </form>
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  <form method="post" action="{{ url_for('ui_cancel_active_runs') }}" style="margin-top: var(--space-3)"
+        onsubmit="return confirm('Cancel ALL active runs?')">
+    <button class="btn btn-danger" type="submit">Cancel all active</button>
+  </form>
+  {% else %}
+  <p class="sub">No active runs.</p>
+  {% endif %}
+</section>
 
 <script>
 function crCount() {

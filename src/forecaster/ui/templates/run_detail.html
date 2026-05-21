@@ -1,158 +1,175 @@
 {% extends "base.html" %}
 {% block title %}Run #{{ run.id }}{% endblock %}
+{% block crumbs %}
+  <a href="{{ url_for('ui_runs') }}">Runs</a>
+  <span class="crumb-sep">/</span>
+  <span class="crumb-current">#{{ run.id }}</span>
+{% endblock %}
 {% block content %}
-<h1>Run #{{ run.id }}</h1>
-<p class="subtitle">
-  <span class="code">{{ run.instance }}</span> · {{ run.metric }} · {{ run.horizon }} ·
-  {% if run.status == 'completed' %}<span class="pill good">completed</span>
-  {% elif run.status == 'running' %}<span class="pill warn">running</span>
-  {% elif run.status == 'failed' %}<span class="pill bad">failed</span>
-  {% else %}<span class="pill muted">{{ run.status }}</span>{% endif %}
-  · {{ "%.1fs"|format(run.duration_seconds or 0) }}
-  · started <span class="code">{{ run.started_at | to_local_short }}</span>
-  {% if run.completed_at %}· completed <span class="code">{{ run.completed_at | to_local_short }}</span>{% endif %}
-  &nbsp;|&nbsp; <a href="{{ url_for('ui_target_detail', instance=run.instance, metric=run.metric, horizon=run.horizon) }}">target overview →</a>
-</p>
+<div class="breadcrumb">
+  <a href="{{ url_for('ui_runs') }}">← all runs</a>
+  <span class="sep">·</span>
+  <a href="{{ url_for('ui_target_detail', instance=run.instance, metric=run.metric, horizon=run.horizon) }}">target overview →</a>
+</div>
 
-{% if run.status in ('pending', 'running') %}
-<form method="post" action="{{ url_for('ui_cancel_run', run_id=run.id) }}"
-      style="margin: 0 0 14px"
-      onsubmit="return confirm('Cancel run #{{ run.id }}? The Celery worker will receive SIGTERM and the run will be marked cancelled.')">
-  <button class="btn" style="background: var(--bad); color: white" type="submit">Cancel this run</button>
-  <span class="sub" style="margin-left: 10px">revokes the Celery task and marks the run as cancelled</span>
-</form>
-{% endif %}
+<div class="page-header">
+  <div class="page-header-text">
+    <h1>Run #{{ run.id }}</h1>
+    <p class="subtitle">
+      <span class="code">{{ run.instance }}</span> · {{ run.metric }} · {{ run.horizon }} ·
+      {% if run.status == 'completed' %}<span class="pill pill-good">completed</span>
+      {% elif run.status == 'running' %}<span class="pill pill-warn">running</span>
+      {% elif run.status == 'failed' %}<span class="pill pill-bad">failed</span>
+      {% else %}<span class="pill pill-muted">{{ run.status }}</span>{% endif %}
+      · {{ "%.1fs"|format(run.duration_seconds or 0) }}
+      · started <span class="code">{{ run.started_at | to_local_short }}</span>
+      {% if run.completed_at %}· completed <span class="code">{{ run.completed_at | to_local_short }}</span>{% endif %}
+    </p>
+  </div>
+  {% if run.status in ('pending', 'running') %}
+  <form method="post" action="{{ url_for('ui_cancel_run', run_id=run.id) }}" class="page-actions"
+        onsubmit="return confirm('Cancel run #{{ run.id }}? The Celery worker will receive SIGTERM and the run will be marked cancelled.')">
+    <button class="btn btn-danger" type="submit">Cancel this run</button>
+  </form>
+  {% endif %}
+</div>
 
 {% if run.error %}
-<div class="card" style="border-color: var(--bad); margin-bottom: 16px">
-  <div class="label">Error</div>
-  <pre class="code-block" style="margin-top: 8px">{{ run.error }}</pre>
+<div class="notice notice-bad">
+  <div style="flex:1">
+    <div class="notice-title">Error</div>
+    <pre class="code-block">{{ run.error }}</pre>
+  </div>
 </div>
 {% endif %}
 
-<div class="two-col">
+<div class="chart-grid-2 is-even">
   <div class="chart-card">
-    <div class="chart-title"><h3>Per-algo composite (ranking)</h3></div>
+    <div class="chart-card-head"><h3>Per-algo composite (ranking)</h3></div>
     <canvas id="rankChart"></canvas>
   </div>
   <div class="chart-card">
-    <div class="chart-title"><h3>Train duration per algo</h3></div>
+    <div class="chart-card-head"><h3>Train duration per algo</h3></div>
     <canvas id="durChart"></canvas>
   </div>
 </div>
 
-<h2>Per-algo scores</h2>
-{% if rows %}
-<table>
-  <thead>
-    <tr>
-      <th>Algo</th><th>Composite</th>
-      {% for s in score_metrics %}<th>{{ s|upper }}</th>{% endfor %}
-      <th>Train duration</th><th>Artifact</th>
-    </tr>
-  </thead>
-  <tbody>
-  {% for row in rows %}
-    <tr>
-      <td><span class="pill {% if row.is_winner %}good{% endif %}">{{ row.algo }}</span></td>
-      <td class="num">{{ "%.3f"|format(row.composite) if row.composite is not none else '—' }}</td>
-      {% for s in score_metrics %}
-        <td class="num">{% if row.scores.get(s) is not none %}{{ "%.3f"|format(row.scores[s]) }}{% else %}—{% endif %}</td>
-      {% endfor %}
-      <td class="num">{{ "%.1fs"|format(row.duration or 0) }}</td>
-      <td class="code">{{ row.artifact or '—' }}</td>
-    </tr>
-  {% endfor %}
-  </tbody>
-</table>
-{% else %}
-<p class="sub">No scored algos yet.</p>
-{% endif %}
-
-{% if run.data_stats %}
-{% set ds = run.data_stats %}
-<h2>Training data footprint</h2>
-<div class="grid">
-  <div class="card">
-    <div class="label">Points fed to models</div>
-    <div class="value">{{ "{:,}".format(ds.used_points or 0) }}</div>
-    <div class="sub">
-      {% if ds.dropped_by_filter %}
-        from {{ "{:,}".format(ds.fetched_points or 0) }} fetched · {{ ds.dropped_by_filter }} dropped by anomaly filter
-      {% else %}
-        fetched at {{ ds.step }} step
-      {% endif %}
-    </div>
-  </div>
-  <div class="card">
-    <div class="label">Lookback configured</div>
-    <div class="value">{{ ds.lookback_days }}d</div>
-    <div class="sub">step: {{ ds.step }}</div>
-  </div>
-  <div class="card">
-    <div class="label">Window covered</div>
-    <div class="value" style="font-size: 18px">{{ "%.1f"|format((ds.span_seconds or 0) / 86400) }}d</div>
-    <div class="sub">{{ ds.first_ts | to_local_short }} → {{ ds.last_ts | to_local_short }}</div>
-  </div>
-  <div class="card">
-    <div class="label">Outlier filter</div>
-    <div class="value" style="font-size: 18px">
-      {% if ds.anomaly_filter_applied %}
-        <span style="color: var(--warn)">on</span>
-      {% else %}
-        <span style="color: var(--muted)">off</span>
-      {% endif %}
-    </div>
-    <div class="sub">
-      {% if ds.anomaly_filter_applied %}{{ ds.dropped_by_filter }} point(s) dropped{% else %}no preprocessing{% endif %}
-    </div>
-  </div>
-</div>
-{% endif %}
-
-<h2>Backtest folds (how train/test was split)</h2>
-<p class="subtitle">
-  Each algorithm above was evaluated with <strong>walk-forward cross-validation</strong>:
-  the historical series is split into K expanding-window folds; each fold trains on
-  everything before the cutoff and predicts the held-out tail. The "Avg score" columns
-  above are the average across these folds. Once the backtest finishes, the winning
-  model is <em>refit on the full history</em> before producing the production forecast,
-  so deployed models use every data point.
-</p>
-{% if per_fold %}
-<div class="chart-card">
-  <div class="chart-title">
-    <h3>Per-fold MAE</h3>
-    <span class="sub">lower is better, oldest fold on the left</span>
-  </div>
-  <canvas id="foldChart"></canvas>
-</div>
-
-<details style="margin-top: 14px">
-  <summary class="sub" style="cursor: pointer">Show per-fold table</summary>
-  <table style="margin-top: 8px">
-    <thead><tr><th>Algo</th><th>Fold</th>{% for s in score_metrics %}<th>{{ s|upper }}</th>{% endfor %}</tr></thead>
-    <tbody>
-    {% for algo, folds in per_fold.items() %}
-      {% for f in folds %}
+<section class="section">
+  <h2>Per-algo scores</h2>
+  {% if rows %}
+  <table class="table">
+    <thead>
       <tr>
-        <td>{% if loop.first %}<span class="pill">{{ algo }}</span>{% endif %}</td>
-        <td class="num">{{ f.fold }}</td>
-        {% for s in score_metrics %}
-        <td class="num">{% if f.get(s) is not none %}{{ "%.3f"|format(f[s]) }}{% else %}—{% endif %}</td>
-        {% endfor %}
+        <th>Algo</th><th>Composite</th>
+        {% for s in score_metrics %}<th>{{ s|upper }}</th>{% endfor %}
+        <th>Train duration</th><th>Artifact</th>
       </tr>
-      {% endfor %}
+    </thead>
+    <tbody>
+    {% for row in rows %}
+      <tr>
+        <td><span class="pill {% if row.is_winner %}pill-good{% endif %}">{{ row.algo }}</span></td>
+        <td class="num">{{ "%.3f"|format(row.composite) if row.composite is not none else '—' }}</td>
+        {% for s in score_metrics %}
+          <td class="num">{% if row.scores.get(s) is not none %}{{ "%.3f"|format(row.scores[s]) }}{% else %}—{% endif %}</td>
+        {% endfor %}
+        <td class="num">{{ "%.1fs"|format(row.duration or 0) }}</td>
+        <td class="code">{{ row.artifact or '—' }}</td>
+      </tr>
     {% endfor %}
     </tbody>
   </table>
-</details>
-{% else %}
-<p class="sub">No per-fold data for this run (it may have used a single tail-holdout fallback).</p>
+  {% else %}
+  <p class="sub">No scored algos yet.</p>
+  {% endif %}
+</section>
+
+{% if run.data_stats %}
+{% set ds = run.data_stats %}
+<section class="section">
+  <h2>Training data footprint</h2>
+  <div class="kpi-grid">
+    <div class="kpi-card">
+      <div class="kpi-label">Points fed to models</div>
+      <div class="kpi-value">{{ "{:,}".format(ds.used_points or 0) }}</div>
+      <div class="kpi-sub">
+        {% if ds.dropped_by_filter %}
+          from {{ "{:,}".format(ds.fetched_points or 0) }} fetched · {{ ds.dropped_by_filter }} dropped by anomaly filter
+        {% else %}
+          fetched at {{ ds.step }} step
+        {% endif %}
+      </div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Lookback configured</div>
+      <div class="kpi-value">{{ ds.lookback_days }}d</div>
+      <div class="kpi-sub">step: {{ ds.step }}</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Window covered</div>
+      <div class="kpi-value is-sm">{{ "%.1f"|format((ds.span_seconds or 0) / 86400) }}d</div>
+      <div class="kpi-sub">{{ ds.first_ts | to_local_short }} → {{ ds.last_ts | to_local_short }}</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Outlier filter</div>
+      <div class="kpi-value is-sm {% if ds.anomaly_filter_applied %}is-warning{% endif %}">
+        {% if ds.anomaly_filter_applied %}on{% else %}off{% endif %}
+      </div>
+      <div class="kpi-sub">
+        {% if ds.anomaly_filter_applied %}{{ ds.dropped_by_filter }} point(s) dropped{% else %}no preprocessing{% endif %}
+      </div>
+    </div>
+  </div>
+</section>
 {% endif %}
 
-<h2>Config snapshot</h2>
-<pre class="code-block">{{ config_snapshot_json }}</pre>
+<section class="section">
+  <h2>Backtest folds <span class="sub">(how train/test was split)</span></h2>
+  <p class="subtitle">
+    Each algorithm above was evaluated with <strong>walk-forward cross-validation</strong>:
+    the historical series is split into K expanding-window folds; each fold trains on
+    everything before the cutoff and predicts the held-out tail. The "Avg score" columns
+    above are the average across these folds. Once the backtest finishes, the winning
+    model is <em>refit on the full history</em> before producing the production forecast,
+    so deployed models use every data point.
+  </p>
+  {% if per_fold %}
+  <div class="chart-card">
+    <div class="chart-card-head">
+      <h3>Per-fold MAE</h3>
+      <span class="sub">lower is better, oldest fold on the left</span>
+    </div>
+    <canvas id="foldChart"></canvas>
+  </div>
+
+  <details style="margin-top: var(--space-3)">
+    <summary class="sub" style="cursor: pointer">Show per-fold table</summary>
+    <table class="table" style="margin-top: var(--space-2)">
+      <thead><tr><th>Algo</th><th>Fold</th>{% for s in score_metrics %}<th>{{ s|upper }}</th>{% endfor %}</tr></thead>
+      <tbody>
+      {% for algo, folds in per_fold.items() %}
+        {% for f in folds %}
+        <tr>
+          <td>{% if loop.first %}<span class="pill">{{ algo }}</span>{% endif %}</td>
+          <td class="num">{{ f.fold }}</td>
+          {% for s in score_metrics %}
+          <td class="num">{% if f.get(s) is not none %}{{ "%.3f"|format(f[s]) }}{% else %}—{% endif %}</td>
+          {% endfor %}
+        </tr>
+        {% endfor %}
+      {% endfor %}
+      </tbody>
+    </table>
+  </details>
+  {% else %}
+  <p class="sub">No per-fold data for this run (it may have used a single tail-holdout fallback).</p>
+  {% endif %}
+</section>
+
+<section class="section">
+  <h2>Config snapshot</h2>
+  <pre class="code-block">{{ config_snapshot_json }}</pre>
+</section>
 
 <script>
 const RANK = {{ rank_chart_json|safe }};

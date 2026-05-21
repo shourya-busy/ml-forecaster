@@ -1,4 +1,4 @@
-<table>
+<table class="table">
   <thead>
     <tr>
       <th>ID</th><th>Instance</th><th>Metric</th><th>Horizon</th>
@@ -13,17 +13,17 @@
       <td>{{ r.metric }}</td>
       <td>{{ r.horizon }}</td>
       <td>
-        {% if r.status == 'completed' %}<span class="pill good">completed</span>
-        {% elif r.status == 'running' %}<span class="pill warn">running</span>
-        {% elif r.status == 'failed' %}<span class="pill bad">failed</span>
-        {% else %}<span class="pill muted">{{ r.status }}</span>{% endif %}
+        {% if r.status == 'completed' %}<span class="pill pill-good">completed</span>
+        {% elif r.status == 'running' %}<span class="pill pill-warn">running</span>
+        {% elif r.status == 'failed' %}<span class="pill pill-bad">failed</span>
+        {% else %}<span class="pill pill-muted">{{ r.status }}</span>{% endif %}
       </td>
-      <td class="code" data-ts="{{ r.started_at }}">{{ r.started_at | to_local_short }}</td>
+      <td class="code">{{ r.started_at | to_local_short }}</td>
       <td class="num">{{ "%.1fs"|format(r.duration_seconds or 0) }}</td>
       <td><a href="{{ url_for('ui_target_detail', instance=r.instance, metric=r.metric, horizon=r.horizon) }}">target →</a></td>
     </tr>
   {% else %}
-    <tr><td colspan="8" class="sub">No runs yet. Trigger one via <code>POST /runs</code>.</td></tr>
+    <tr><td colspan="8" class="t-empty">No runs yet. Trigger one from a target's detail page.</td></tr>
   {% endfor %}
   </tbody>
 </table>

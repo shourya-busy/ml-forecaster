@@ -1,34 +1,46 @@
 {% extends "base.html" %}
 {% block title %}Targets{% endblock %}
 {% block content %}
-<h1>Targets</h1>
-<p class="subtitle">Every (instance × metric × horizon) tracked, current winner, and stability.</p>
+<div class="page-header">
+  <div class="page-header-text">
+    <h1>Targets</h1>
+    <p class="subtitle">Every (instance × metric × horizon) tracked, current winner, and stability.</p>
+  </div>
+</div>
 
-<form class="filterbar" method="get">
-  <input type="text" name="instance" value="{{ filters.instance or '' }}" placeholder="instance contains…">
-  <select name="metric">
-    <option value="">all metrics</option>
-    {% for m in all_metrics %}
-    <option value="{{ m }}" {% if filters.metric == m %}selected{% endif %}>{{ m }}</option>
-    {% endfor %}
-  </select>
-  <select name="horizon">
-    <option value="">all horizons</option>
-    {% for h in all_horizons %}
-    <option value="{{ h }}" {% if filters.horizon == h %}selected{% endif %}>{{ h }}</option>
-    {% endfor %}
-  </select>
-  <select name="winner">
-    <option value="">any winner</option>
-    {% for w in all_winners %}
-    <option value="{{ w }}" {% if filters.winner == w %}selected{% endif %}>{{ w }}</option>
-    {% endfor %}
-  </select>
+<form class="toolbar" method="get">
+  <label class="field-inline">
+    <input type="text" name="instance" value="{{ filters.instance or '' }}" placeholder="instance contains…">
+  </label>
+  <label class="field-inline">
+    <select name="metric">
+      <option value="">all metrics</option>
+      {% for m in all_metrics %}
+      <option value="{{ m }}" {% if filters.metric == m %}selected{% endif %}>{{ m }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label class="field-inline">
+    <select name="horizon">
+      <option value="">all horizons</option>
+      {% for h in all_horizons %}
+      <option value="{{ h }}" {% if filters.horizon == h %}selected{% endif %}>{{ h }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label class="field-inline">
+    <select name="winner">
+      <option value="">any winner</option>
+      {% for w in all_winners %}
+      <option value="{{ w }}" {% if filters.winner == w %}selected{% endif %}>{{ w }}</option>
+      {% endfor %}
+    </select>
+  </label>
   <button class="btn" type="submit">Apply</button>
-  <a class="btn secondary" href="{{ url_for('ui_targets') }}">Reset</a>
+  <a class="btn btn-secondary" href="{{ url_for('ui_targets') }}">Reset</a>
 </form>
 
-<table>
+<table class="table">
   <thead>
     <tr>
       <th>Instance</th><th>Metric</th><th>Horizon</th>
@@ -42,21 +54,21 @@
       <td class="code">{{ r.instance }}</td>
       <td>{{ r.metric }}</td>
       <td>{{ r.horizon }}</td>
-      <td>{% if r.current_winner %}<span class="pill">{{ r.current_winner }}</span>{% else %}—{% endif %}</td>
+      <td>{% if r.current_winner %}<span class="pill pill-primary">{{ r.current_winner }}</span>{% else %}—{% endif %}</td>
       <td class="num">{{ "%.3f"|format(r.current_top3[0].composite) if r.current_top3 else '—' }}</td>
       <td>{% if r.current_top3|length > 1 %}{{ r.current_top3[1].algo }} <span class="sub">({{ "%.3f"|format(r.current_top3[1].composite) }})</span>{% else %}—{% endif %}</td>
       <td>
-        {% if r.unique_winners_recent <= 1 %}<span class="pill good">stable</span>
-        {% elif r.unique_winners_recent <= 3 %}<span class="pill warn">flapping ({{ r.unique_winners_recent }})</span>
-        {% else %}<span class="pill bad">unstable ({{ r.unique_winners_recent }})</span>{% endif %}
+        {% if r.unique_winners_recent <= 1 %}<span class="pill pill-good">stable</span>
+        {% elif r.unique_winners_recent <= 3 %}<span class="pill pill-warn">flapping ({{ r.unique_winners_recent }})</span>
+        {% else %}<span class="pill pill-bad">unstable ({{ r.unique_winners_recent }})</span>{% endif %}
       </td>
       <td class="code">{{ r.winner_since | to_local_short }}</td>
       <td><a href="{{ url_for('ui_target_detail', instance=r.instance, metric=r.metric, horizon=r.horizon) }}">detail →</a></td>
     </tr>
   {% else %}
-    <tr><td colspan="9" class="sub">No targets match the current filters.</td></tr>
+    <tr><td colspan="9" class="t-empty">No targets match the current filters.</td></tr>
   {% endfor %}
   </tbody>
 </table>
-<p class="subtitle" style="margin-top:14px">{{ targets|length }} of {{ total_targets }} targets shown.</p>
+<p class="table-summary">{{ targets|length }} of {{ total_targets }} targets shown.</p>
 {% endblock %}

@@ -1,73 +1,91 @@
 {% extends "base.html" %}
 {% block title %}Schedule{% endblock %}
 {% block content %}
-<h1>Schedule</h1>
-<p class="subtitle">All cron times are in <span class="code">{{ display_tz }}</span>. Edits take effect within ~60s (the scheduler reconciles automatically).</p>
+<div class="page-header">
+  <div class="page-header-text">
+    <h1>Schedule</h1>
+    <p class="subtitle">All cron times are in <span class="code">{{ display_tz }}</span>. Edits take effect within ~60s (the scheduler reconciles automatically).</p>
+  </div>
+</div>
 
-<h2>Per-horizon retrain cadences</h2>
-{% for h in horizons %}
-<form class="card" method="post" action="{{ url_for('ui_schedule_save_horizon') }}" style="margin-bottom: 12px">
-  <input type="hidden" name="horizon" value="{{ h.name }}">
-  <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 10px; flex-wrap: wrap">
-    <strong style="font-size: 16px">{{ h.name }}</strong>
-    <span class="sub">step <code>{{ h.step }}</code> · forecast <code>{{ h.horizon }}</code> · lookback <code>{{ h.lookback_days }}d</code> · {{ h.points_predicted }} points predicted · ~{{ "{:,}".format(h.training_points_per_run) }} pts/run/target trained on</span>
-  </div>
-  <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(160px, 1fr))">
-    <label>Retrain cron <span class="sub">({{ display_tz }})</span>
-      <input type="text" name="retrain" value="{{ h.retrain }}" required style="width: 100%; background: var(--panel-2); color: var(--text); border: 1px solid var(--border); padding: 6px 10px; border-radius: 6px; font-family: ui-monospace, monospace; font-size: 12px"></label>
-    <label>Step <span class="sub">(1min · 5min · 1h)</span>
-      <input type="text" name="step" placeholder="{{ h.step }}" style="width: 100%; background: var(--panel-2); color: var(--text); border: 1px solid var(--border); padding: 6px 10px; border-radius: 6px; font-family: ui-monospace, monospace; font-size: 12px"></label>
-    <label>Forecast horizon <span class="sub">(1h · 24h · 7d)</span>
-      <input type="text" name="forecast_horizon" placeholder="{{ h.horizon }}" style="width: 100%; background: var(--panel-2); color: var(--text); border: 1px solid var(--border); padding: 6px 10px; border-radius: 6px; font-family: ui-monospace, monospace; font-size: 12px"></label>
-    <label>Lookback (days)
-      <input type="number" min="1" max="365" name="lookback_days" placeholder="{{ h.lookback_days }}" style="width: 100%; background: var(--panel-2); color: var(--text); border: 1px solid var(--border); padding: 6px 10px; border-radius: 6px; font-family: ui-monospace, monospace; font-size: 12px"></label>
-  </div>
-  <div style="margin-top: 10px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap">
-    <button class="btn" type="submit">Save changes</button>
-    <span class="sub">Leave any field blank to keep its current value. Changing <code>step</code> or <code>forecast horizon</code> means the next training run refits models from scratch (old artifacts were fit at the old step).</span>
-  </div>
-  {% if h.next_fires %}
-  <div class="sub" style="margin-top: 8px">
-    Next: {% for ts in h.next_fires %}<span class="pill muted">{{ ts | to_local_short }}</span> {% endfor %}
-  </div>
-  {% elif h.error %}
-  <div class="sub" style="margin-top: 8px; color: var(--bad)">cron parse error: {{ h.error }}</div>
-  {% endif %}
-</form>
-{% endfor %}
-
-<h2>Upcoming runs (next 30)</h2>
-<table>
-  <thead>
-    <tr><th>When ({{ display_tz }})</th><th>Type</th><th>Horizon</th><th>Target</th><th>Cron</th></tr>
-  </thead>
-  <tbody>
-  {% for r in upcoming %}
-    <tr>
-      <td class="code">{{ r.when | to_local_short }}</td>
-      <td>
-        {% if r.type == 'fan-out' %}<span class="pill">fan-out</span>
-        {% else %}<span class="pill muted">per-target</span>{% endif %}
-      </td>
-      <td>{{ r.horizon }}</td>
-      <td class="code">{{ r.target }}</td>
-      <td class="code">{{ r.cron }}</td>
-    </tr>
-  {% else %}
-    <tr><td colspan="5" class="sub">No upcoming runs scheduled. Did the scheduler service start?</td></tr>
+<section class="section">
+  <h2>Per-horizon retrain cadences</h2>
+  {% for h in horizons %}
+  <form class="kpi-card" method="post" action="{{ url_for('ui_schedule_save_horizon') }}" style="margin-bottom: var(--space-3)">
+    <input type="hidden" name="horizon" value="{{ h.name }}">
+    <div style="display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-3); margin-bottom: var(--space-3); flex-wrap: wrap">
+      <strong style="font-size: 16px">{{ h.name }}</strong>
+      <span class="sub">step <code>{{ h.step }}</code> · forecast <code>{{ h.horizon }}</code> · lookback <code>{{ h.lookback_days }}d</code> · {{ h.points_predicted }} points predicted · ~{{ "{:,}".format(h.training_points_per_run) }} pts/run/target trained on</span>
+    </div>
+    <div class="field-grid">
+      <label class="field">
+        <span class="field-label">Retrain cron <span class="sub">({{ display_tz }})</span></span>
+        <input type="text" name="retrain" value="{{ h.retrain }}" required class="mono">
+      </label>
+      <label class="field">
+        <span class="field-label">Step <span class="sub">(1min · 5min · 1h)</span></span>
+        <input type="text" name="step" placeholder="{{ h.step }}" class="mono">
+      </label>
+      <label class="field">
+        <span class="field-label">Forecast horizon <span class="sub">(1h · 24h · 7d)</span></span>
+        <input type="text" name="forecast_horizon" placeholder="{{ h.horizon }}" class="mono">
+      </label>
+      <label class="field">
+        <span class="field-label">Lookback (days)</span>
+        <input type="number" min="1" max="365" name="lookback_days" placeholder="{{ h.lookback_days }}">
+      </label>
+    </div>
+    <div style="margin-top: var(--space-3); display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap">
+      <button class="btn" type="submit">Save changes</button>
+      <span class="sub">Leave any field blank to keep its current value. Changing <code>step</code> or <code>forecast horizon</code> means the next training run refits models from scratch (old artifacts were fit at the old step).</span>
+    </div>
+    {% if h.next_fires %}
+    <div class="sub" style="margin-top: var(--space-2)">
+      Next: {% for ts in h.next_fires %}<span class="pill pill-muted">{{ ts | to_local_short }}</span> {% endfor %}
+    </div>
+    {% elif h.error %}
+    <div class="sub" style="margin-top: var(--space-2); color: var(--danger)">cron parse error: {{ h.error }}</div>
+    {% endif %}
+  </form>
   {% endfor %}
-  </tbody>
-</table>
+</section>
 
-<h2>Cron syntax quick reference</h2>
-<table>
-  <thead><tr><th>Expression</th><th>Meaning</th></tr></thead>
-  <tbody>
-    <tr><td class="code">*/15 * * * *</td><td>every 15 minutes</td></tr>
-    <tr><td class="code">0 * * * *</td><td>at minute 0 of every hour</td></tr>
-    <tr><td class="code">0 2 * * *</td><td>daily at 02:00 {{ display_tz }}</td></tr>
-    <tr><td class="code">30 9 * * 1-5</td><td>09:30 Mon–Fri</td></tr>
-    <tr><td class="code">0 */6 * * *</td><td>every 6 hours on the hour</td></tr>
-  </tbody>
-</table>
+<section class="section">
+  <h2>Upcoming runs <span class="sub">(next 30)</span></h2>
+  <table class="table">
+    <thead>
+      <tr><th>When ({{ display_tz }})</th><th>Type</th><th>Horizon</th><th>Target</th><th>Cron</th></tr>
+    </thead>
+    <tbody>
+    {% for r in upcoming %}
+      <tr>
+        <td class="code">{{ r.when | to_local_short }}</td>
+        <td>
+          {% if r.type == 'fan-out' %}<span class="pill pill-primary">fan-out</span>
+          {% else %}<span class="pill pill-muted">per-target</span>{% endif %}
+        </td>
+        <td>{{ r.horizon }}</td>
+        <td class="code">{{ r.target }}</td>
+        <td class="code">{{ r.cron }}</td>
+      </tr>
+    {% else %}
+      <tr><td colspan="5" class="t-empty">No upcoming runs scheduled. Did the scheduler service start?</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+<section class="section">
+  <h2>Cron syntax quick reference</h2>
+  <table class="table">
+    <thead><tr><th>Expression</th><th>Meaning</th></tr></thead>
+    <tbody>
+      <tr><td class="code">*/15 * * * *</td><td>every 15 minutes</td></tr>
+      <tr><td class="code">0 * * * *</td><td>at minute 0 of every hour</td></tr>
+      <tr><td class="code">0 2 * * *</td><td>daily at 02:00 {{ display_tz }}</td></tr>
+      <tr><td class="code">30 9 * * 1-5</td><td>09:30 Mon–Fri</td></tr>
+      <tr><td class="code">0 */6 * * *</td><td>every 6 hours on the hour</td></tr>
+    </tbody>
+  </table>
+</section>
 {% endblock %}

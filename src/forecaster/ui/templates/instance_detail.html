@@ -1,65 +1,78 @@
 {% extends "base.html" %}
-{% block title %}{{ instance }} · all targets{% endblock %}
+{% block title %}{{ instance }}{% endblock %}
+{% block crumbs %}
+  <a href="{{ url_for('ui_instances') }}">Instances</a>
+  <span class="crumb-sep">/</span>
+  <span class="crumb-current">{{ instance }}</span>
+{% endblock %}
 {% block content %}
-<h1><span class="code">{{ instance }}</span></h1>
-<p class="subtitle">
-  All metric × horizon targets for this server, and the most recent training runs.
-  &nbsp;|&nbsp; <a href="{{ url_for('ui_instances') }}">← all instances</a>
-</p>
+<div class="breadcrumb">
+  <a href="{{ url_for('ui_instances') }}">← all instances</a>
+</div>
+<div class="page-header">
+  <div class="page-header-text">
+    <h1><span class="code">{{ instance }}</span></h1>
+    <p class="subtitle">All metric × horizon targets for this server, and the most recent training runs.</p>
+  </div>
+</div>
 
-<h2>Health grid</h2>
-<table>
-  <thead>
-    <tr>
-      <th>Metric / Horizon</th><th>Current winner</th><th>Composite</th>
-      <th>Stability</th><th>Last update</th><th></th>
-    </tr>
-  </thead>
-  <tbody>
-  {% for row in targets %}
-    <tr>
-      <td>{{ row.metric }} / {{ row.horizon }}</td>
-      <td>{% if row.current_winner %}<span class="pill good">{{ row.current_winner }}</span>{% else %}—{% endif %}</td>
-      <td class="num">{% if row.current_top3 and row.current_top3[0].composite is not none %}{{ "%.3f"|format(row.current_top3[0].composite) }}{% else %}—{% endif %}</td>
-      <td>
-        {% if row.unique_winners_recent <= 1 %}<span class="pill good">stable</span>
-        {% elif row.unique_winners_recent <= 3 %}<span class="pill warn">flapping ({{ row.unique_winners_recent }})</span>
-        {% else %}<span class="pill bad">unstable ({{ row.unique_winners_recent }})</span>{% endif %}
-      </td>
-      <td class="code">{{ row.winner_since | to_local_short }}</td>
-      <td><a href="{{ url_for('ui_target_detail', instance=instance, metric=row.metric, horizon=row.horizon) }}">deep dive →</a></td>
-    </tr>
-  {% else %}
-    <tr><td colspan="6" class="sub">No completed runs for this instance yet.</td></tr>
-  {% endfor %}
-  </tbody>
-</table>
+<section class="section">
+  <h2>Health grid</h2>
+  <table class="table">
+    <thead>
+      <tr>
+        <th>Metric / Horizon</th><th>Current winner</th><th>Composite</th>
+        <th>Stability</th><th>Last update</th><th></th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for row in targets %}
+      <tr>
+        <td>{{ row.metric }} / {{ row.horizon }}</td>
+        <td>{% if row.current_winner %}<span class="pill pill-good">{{ row.current_winner }}</span>{% else %}—{% endif %}</td>
+        <td class="num">{% if row.current_top3 and row.current_top3[0].composite is not none %}{{ "%.3f"|format(row.current_top3[0].composite) }}{% else %}—{% endif %}</td>
+        <td>
+          {% if row.unique_winners_recent <= 1 %}<span class="pill pill-good">stable</span>
+          {% elif row.unique_winners_recent <= 3 %}<span class="pill pill-warn">flapping ({{ row.unique_winners_recent }})</span>
+          {% else %}<span class="pill pill-bad">unstable ({{ row.unique_winners_recent }})</span>{% endif %}
+        </td>
+        <td class="code">{{ row.winner_since | to_local_short }}</td>
+        <td><a href="{{ url_for('ui_target_detail', instance=instance, metric=row.metric, horizon=row.horizon) }}">deep dive →</a></td>
+      </tr>
+    {% else %}
+      <tr><td colspan="6" class="t-empty">No completed runs for this instance yet.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</section>
 
-<h2>Recent runs (latest {{ recent_runs|length }})</h2>
-<table>
-  <thead>
-    <tr>
-      <th>ID</th><th>Metric</th><th>Horizon</th><th>Status</th>
-      <th>Started</th><th>Duration</th><th>Error</th>
-    </tr>
-  </thead>
-  <tbody>
-  {% for r in recent_runs %}
-    <tr>
-      <td><a href="{{ url_for('ui_run_detail', run_id=r.id) }}">#{{ r.id }}</a></td>
-      <td>{{ r.metric }}</td>
-      <td>{{ r.horizon }}</td>
-      <td>
-        {% if r.status == 'completed' %}<span class="pill good">completed</span>
-        {% elif r.status == 'running' %}<span class="pill warn">running</span>
-        {% elif r.status == 'failed' %}<span class="pill bad">failed</span>
-        {% else %}<span class="pill muted">{{ r.status }}</span>{% endif %}
-      </td>
-      <td class="code">{{ r.started_at | to_local_short }}</td>
-      <td class="num">{{ "%.1fs"|format(r.duration_seconds or 0) }}</td>
-      <td class="sub">{{ (r.error or '')[:80] }}</td>
-    </tr>
-  {% endfor %}
-  </tbody>
-</table>
+<section class="section">
+  <h2>Recent runs <span class="sub">(latest {{ recent_runs|length }})</span></h2>
+  <table class="table">
+    <thead>
+      <tr>
+        <th>ID</th><th>Metric</th><th>Horizon</th><th>Status</th>
+        <th>Started</th><th>Duration</th><th>Error</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for r in recent_runs %}
+      <tr>
+        <td><a href="{{ url_for('ui_run_detail', run_id=r.id) }}">#{{ r.id }}</a></td>
+        <td>{{ r.metric }}</td>
+        <td>{{ r.horizon }}</td>
+        <td>
+          {% if r.status == 'completed' %}<span class="pill pill-good">completed</span>
+          {% elif r.status == 'running' %}<span class="pill pill-warn">running</span>
+          {% elif r.status == 'failed' %}<span class="pill pill-bad">failed</span>
+          {% else %}<span class="pill pill-muted">{{ r.status }}</span>{% endif %}
+        </td>
+        <td class="code">{{ r.started_at | to_local_short }}</td>
+        <td class="num">{{ "%.1fs"|format(r.duration_seconds or 0) }}</td>
+        <td class="sub">{{ (r.error or '')[:80] }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</section>
 {% endblock %}

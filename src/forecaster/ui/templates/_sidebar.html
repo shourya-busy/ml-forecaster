@@ -1,0 +1,90 @@
+{# Left sidebar nav. `active` and (optionally) `subnav` come from each route's
+   template context — see src/forecaster/ui/routes.py. #}
+{% set training_paused = is_training_paused() %}
+<aside class="sidebar">
+  <a class="sidebar-brand" href="{{ url_for('ui_overview') }}">
+    <span class="brand-dot">●</span>
+    <span class="brand-name">forecaster</span>
+  </a>
+
+  <a class="sidebar-status {% if training_paused %}is-paused{% else %}is-active{% endif %}"
+     href="{{ url_for('ui_overview') }}"
+     title="{% if training_paused %}Scheduled training is paused.{% else %}Scheduled training is active.{% endif %}">
+    <span class="status-dot"></span>
+    <span class="status-text">{% if training_paused %}Training paused{% else %}Training active{% endif %}</span>
+  </a>
+
+  <nav class="sidebar-nav">
+    <div class="sidebar-group">
+      <div class="sidebar-group-label">Dashboard</div>
+      <a class="sidebar-link {% if active == 'overview' %}is-active{% endif %}"
+         href="{{ url_for('ui_overview') }}">
+        <span class="link-text">Overview</span>
+      </a>
+    </div>
+
+    <div class="sidebar-group">
+      <div class="sidebar-group-label">Forecasts</div>
+      <a class="sidebar-link {% if active == 'targets' %}is-active{% endif %}"
+         href="{{ url_for('ui_targets') }}">
+        <span class="link-text">Targets</span>
+      </a>
+      <a class="sidebar-link {% if active == 'instances' %}is-active{% endif %}"
+         href="{{ url_for('ui_instances') }}">
+        <span class="link-text">Instances</span>
+      </a>
+    </div>
+
+    <div class="sidebar-group">
+      <div class="sidebar-group-label">Analytics</div>
+      <a class="sidebar-link {% if active == 'trends' %}is-active{% endif %}"
+         href="{{ url_for('ui_trends') }}">
+        <span class="link-text">Trends</span>
+      </a>
+      <a class="sidebar-link {% if active == 'compare' %}is-active{% endif %}"
+         href="{{ url_for('ui_compare') }}">
+        <span class="link-text">Compare</span>
+      </a>
+      <a class="sidebar-link {% if active == 'models' %}is-active{% endif %}"
+         href="{{ url_for('ui_models') }}">
+        <span class="link-text">Models</span>
+      </a>
+    </div>
+
+    <div class="sidebar-group">
+      <div class="sidebar-group-label">Training</div>
+      <a class="sidebar-link {% if active == 'runs' %}is-active{% endif %}"
+         href="{{ url_for('ui_runs') }}">
+        <span class="link-text">Runs</span>
+      </a>
+      <a class="sidebar-link {% if active == 'custom_run' %}is-active{% endif %}"
+         href="{{ url_for('ui_custom_run') }}">
+        <span class="link-text">Custom Run</span>
+      </a>
+      <a class="sidebar-link {% if active == 'schedule' %}is-active{% endif %}"
+         href="{{ url_for('ui_schedule') }}">
+        <span class="link-text">Schedule</span>
+      </a>
+    </div>
+
+    <div class="sidebar-group">
+      <div class="sidebar-group-label">Settings</div>
+      <a class="sidebar-link {% if active == 'manage' and subnav == 'targets' %}is-active{% endif %}"
+         href="{{ url_for('ui_manage_targets') }}">
+        <span class="link-text">Targets</span>
+      </a>
+      <a class="sidebar-link {% if active == 'manage' and subnav == 'metrics' %}is-active{% endif %}"
+         href="{{ url_for('ui_manage_metrics') }}">
+        <span class="link-text">Metrics</span>
+      </a>
+      <a class="sidebar-link {% if active == 'manage' and subnav == 'training' %}is-active{% endif %}"
+         href="{{ url_for('ui_manage_training') }}">
+        <span class="link-text">Training</span>
+      </a>
+      <a class="sidebar-link {% if active == 'config' %}is-active{% endif %}"
+         href="{{ url_for('ui_config') }}">
+        <span class="link-text">Config</span>
+      </a>
+    </div>
+  </nav>
+</aside>

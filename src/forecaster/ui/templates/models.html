@@ -1,11 +1,16 @@
 {% extends "base.html" %}
 {% block title %}Models{% endblock %}
 {% block content %}
-<h1>Models</h1>
-<p class="subtitle">Per-algorithm aggregate stats. Filter and sort to answer specific questions ("which model is winning <em>now</em>?", "which family is the most accurate?", "what's the fastest model with at least 10 runs?").</p>
+<div class="page-header">
+  <div class="page-header-text">
+    <h1>Models</h1>
+    <p class="subtitle">Per-algorithm aggregate stats. Filter and sort to answer specific questions ("which model is winning <em>now</em>?", "which family is the most accurate?", "what's the fastest model with at least 10 runs?").</p>
+  </div>
+</div>
 
-<form class="filterbar" method="get">
-  <label>Metric
+<form class="toolbar" method="get">
+  <label class="field-inline">
+    <span class="sub">Metric</span>
     <select name="metric" onchange="this.form.submit()">
       <option value="">all metrics</option>
       {% for m in metrics %}
@@ -13,7 +18,8 @@
       {% endfor %}
     </select>
   </label>
-  <label>Horizon
+  <label class="field-inline">
+    <span class="sub">Horizon</span>
     <select name="horizon" onchange="this.form.submit()">
       <option value="">all horizons</option>
       {% for h in horizons %}
@@ -21,7 +27,8 @@
       {% endfor %}
     </select>
   </label>
-  <label>Window
+  <label class="field-inline">
+    <span class="sub">Window</span>
     <select name="window" onchange="this.form.submit()">
       <option value="all" {% if selected_window == 'all' %}selected{% endif %}>all history</option>
       {% for w in window_presets %}
@@ -29,14 +36,16 @@
       {% endfor %}
     </select>
   </label>
-  <label>State
+  <label class="field-inline">
+    <span class="sub">State</span>
     <select name="state" onchange="this.form.submit()">
       <option value="">all</option>
       <option value="enabled" {% if selected_state == 'enabled' %}selected{% endif %}>enabled only</option>
       <option value="disabled" {% if selected_state == 'disabled' %}selected{% endif %}>disabled only</option>
     </select>
   </label>
-  <label>Family
+  <label class="field-inline">
+    <span class="sub">Family</span>
     <select name="family" onchange="this.form.submit()">
       <option value="">all families</option>
       {% for f in family_options %}
@@ -44,50 +53,52 @@
       {% endfor %}
     </select>
   </label>
-  <label>Min runs
+  <label class="field-inline">
+    <span class="sub">Min runs</span>
     <select name="min_runs" onchange="this.form.submit()">
       {% for n in [0, 1, 5, 10, 25, 50, 100] %}
       <option value="{{ n }}" {% if selected_min_runs == n %}selected{% endif %}>{{ n }}</option>
       {% endfor %}
     </select>
   </label>
-  <label>Sort by
+  <label class="field-inline">
+    <span class="sub">Sort by</span>
     <select name="sort" onchange="this.form.submit()">
       {% for s in sort_options %}
       <option value="{{ s }}" {% if selected_sort == s %}selected{% endif %}>{{ s.replace('_', ' ') }}</option>
       {% endfor %}
     </select>
   </label>
-  <label style="display: flex; align-items: center; gap: 6px">
+  <label class="field-inline">
     <input type="checkbox" name="show_all" value="1" {% if selected_show_all %}checked{% endif %} onchange="this.form.submit()">
-    Show untrained
+    <span class="sub">Show untrained</span>
   </label>
-  <a class="btn secondary" href="{{ url_for('ui_models') }}">Reset</a>
+  <span class="toolbar-spacer"></span>
+  <a class="btn btn-secondary btn-sm" href="{{ url_for('ui_models') }}">Reset</a>
 </form>
 
-<!-- ===== Summary cards ===== -->
-<div class="grid" style="margin-bottom: 14px">
-  <div class="card">
-    <div class="label">Active algorithms</div>
-    <div class="value">{{ summary.active }}</div>
-    <div class="sub">of {{ summary.registered }} registered · for current filters</div>
+<div class="kpi-grid" style="margin-bottom: var(--space-4)">
+  <div class="kpi-card">
+    <div class="kpi-label">Active algorithms</div>
+    <div class="kpi-value">{{ summary.active }}</div>
+    <div class="kpi-sub">of {{ summary.registered }} registered · for current filters</div>
   </div>
-  <div class="card">
-    <div class="label">Total runs entered</div>
-    <div class="value">{{ "{:,}".format(summary.total_runs) }}</div>
-    <div class="sub">sum across filtered algorithms</div>
+  <div class="kpi-card">
+    <div class="kpi-label">Total runs entered</div>
+    <div class="kpi-value">{{ "{:,}".format(summary.total_runs) }}</div>
+    <div class="kpi-sub">sum across filtered algorithms</div>
   </div>
-  <div class="card">
-    <div class="label">Total wins</div>
-    <div class="value">{{ "{:,}".format(summary.total_wins) }}</div>
-    <div class="sub">rankings where these algos placed #1</div>
+  <div class="kpi-card">
+    <div class="kpi-label">Total wins</div>
+    <div class="kpi-value">{{ "{:,}".format(summary.total_wins) }}</div>
+    <div class="kpi-sub">rankings where these algos placed #1</div>
   </div>
-  <div class="card">
-    <div class="label">Top performer</div>
-    <div class="value" style="font-size: 18px">
+  <div class="kpi-card">
+    <div class="kpi-label">Top performer</div>
+    <div class="kpi-value is-sm">
       {% if summary.top_algo %}{{ summary.top_algo }}{% else %}—{% endif %}
     </div>
-    <div class="sub">
+    <div class="kpi-sub">
       {% if summary.top_win_rate is not none %}
         {{ "%.1f%%"|format(summary.top_win_rate) }} win rate
       {% else %}no data{% endif %}
@@ -95,78 +106,87 @@
   </div>
 </div>
 
-<!-- ===== Charts ===== -->
-<div class="chart-card" style="margin-bottom: 14px">
-  <div class="chart-title"><h3>Win rate by algorithm</h3>
-    <span class="sub" id="wr-meta">—</span></div>
-  <div id="wr-canvas-wrap"><canvas id="winrateChart"></canvas></div>
-  <p id="wr-empty" class="sub" style="display: none; padding: 12px; color: var(--muted)">
-    No algorithms match the current filters. Try lowering <em>Min runs</em> or ticking <em>Show untrained</em>.
-  </p>
-</div>
-
-<div class="chart-card" style="margin-bottom: 14px">
-  <div class="chart-title"><h3>Wins by metric (stacked)</h3>
-    <span class="sub" id="wbm-meta">—</span></div>
-  <div id="wbm-canvas-wrap"><canvas id="winByMetricChart"></canvas></div>
-  <p id="wbm-empty" class="sub" style="display: none; padding: 12px; color: var(--muted)">
-    No wins for the selected filters.
-  </p>
-</div>
-
-<div class="two-col" style="margin-bottom: 14px">
-  <div class="chart-card">
-    <div class="chart-title"><h3>Avg MAE by algorithm</h3>
-      <span class="sub" id="mae-meta">lower is better</span></div>
-    <div id="mae-canvas-wrap"><canvas id="maeChart"></canvas></div>
-    <p id="mae-empty" class="sub" style="display: none; padding: 12px; color: var(--muted)">No MAE data.</p>
+<div data-tabs>
+  <div class="tabs">
+    <button type="button" class="tab is-active" data-tab="tab-performance">Performance</button>
+    <button type="button" class="tab" data-tab="tab-speed">Speed</button>
+    <button type="button" class="tab" data-tab="tab-distribution">Distribution</button>
   </div>
-  <div class="chart-card">
-    <div class="chart-title"><h3>Avg train time</h3>
-      <span class="sub" id="dur-meta">seconds</span></div>
-    <div id="dur-canvas-wrap"><canvas id="durChart"></canvas></div>
-    <p id="dur-empty" class="sub" style="display: none; padding: 12px; color: var(--muted)">No timing data.</p>
+
+  <div id="tab-performance" class="tab-panel is-active">
+    <div class="chart-card" style="margin-bottom: var(--space-4)">
+      <div class="chart-card-head"><h3>Win rate by algorithm</h3>
+        <span class="sub" id="wr-meta">—</span></div>
+      <div id="wr-canvas-wrap"><canvas id="winrateChart"></canvas></div>
+      <p id="wr-empty" class="chart-empty" style="display: none">
+        No algorithms match the current filters. Try lowering <em>Min runs</em> or ticking <em>Show untrained</em>.
+      </p>
+    </div>
+    <div class="chart-card">
+      <div class="chart-card-head"><h3>Average MAE by algorithm</h3>
+        <span class="sub" id="mae-meta">lower is better</span></div>
+      <div id="mae-canvas-wrap"><canvas id="maeChart"></canvas></div>
+      <p id="mae-empty" class="chart-empty" style="display: none">No MAE data.</p>
+    </div>
+  </div>
+
+  <div id="tab-speed" class="tab-panel">
+    <div class="chart-card">
+      <div class="chart-card-head"><h3>Average train time</h3>
+        <span class="sub" id="dur-meta">seconds per fit</span></div>
+      <div id="dur-canvas-wrap"><canvas id="durChart"></canvas></div>
+      <p id="dur-empty" class="chart-empty" style="display: none">No timing data.</p>
+    </div>
+  </div>
+
+  <div id="tab-distribution" class="tab-panel">
+    <div class="chart-card" style="margin-bottom: var(--space-4)">
+      <div class="chart-card-head"><h3>Wins by metric</h3>
+        <span class="sub" id="wbm-meta">—</span></div>
+      <div id="wbm-canvas-wrap"><canvas id="winByMetricChart"></canvas></div>
+      <p id="wbm-empty" class="chart-empty" style="display: none">No wins for the selected filters.</p>
+    </div>
+    <div class="chart-card">
+      <div class="chart-card-head"><h3>Wins by family</h3>
+        <span class="sub" id="fam-meta">rolled up by algorithm family</span></div>
+      <div id="fam-canvas-wrap" style="height: 280px"><canvas id="familyChart"></canvas></div>
+      <p id="fam-empty" class="chart-empty" style="display: none">No wins to roll up.</p>
+    </div>
   </div>
 </div>
 
-<div class="chart-card" style="margin-bottom: 14px">
-  <div class="chart-title"><h3>Wins by family</h3>
-    <span class="sub" id="fam-meta">rolled up by algorithm family</span></div>
-  <div id="fam-canvas-wrap" style="height: 280px"><canvas id="familyChart"></canvas></div>
-  <p id="fam-empty" class="sub" style="display: none; padding: 12px; color: var(--muted)">No wins to roll up.</p>
-</div>
-
-<!-- ===== Details table (always shows ALL registered algos) ===== -->
-<h2>Algorithm details <span class="sub">({{ models | length }} total registered — table ignores chart filters)</span></h2>
-<table>
-  <thead>
-    <tr>
-      <th>Algorithm</th><th>Family</th><th>State</th>
-      <th>Wins</th><th>Runs entered</th><th>Win rate</th>
-      <th>Avg MAE</th><th>Avg RMSE</th><th>Avg train time</th>
-      <th>Per-metric eligibility</th>
-    </tr>
-  </thead>
-  <tbody>
-  {% for row in models %}
-    <tr>
-      <td><span class="pill">{{ row.algo }}</span></td>
-      <td><span class="pill muted">{{ row.family }}</span></td>
-      <td>
-        {% if row.state == 'enabled' %}<span class="pill good">enabled</span>
-        {% else %}<span class="pill muted">disabled</span>{% endif %}
-      </td>
-      <td class="num">{{ row.wins or 0 }}</td>
-      <td class="num">{{ row.runs or 0 }}</td>
-      <td class="num">{{ "%.1f%%"|format((row.win_rate or 0) * 100) if row.runs else '—' }}</td>
-      <td class="num">{{ "%.3f"|format(row.avg_mae) if row.avg_mae is not none else '—' }}</td>
-      <td class="num">{{ "%.3f"|format(row.avg_rmse) if row.avg_rmse is not none else '—' }}</td>
-      <td class="num">{{ "%.1fs"|format(row.avg_train_duration) if row.avg_train_duration is not none else '—' }}</td>
-      <td class="sub">{{ row.eligible_metrics | join(', ') if row.eligible_metrics else 'all' }}</td>
-    </tr>
-  {% endfor %}
-  </tbody>
-</table>
+<section class="section">
+  <h2>Algorithm details <span class="sub">({{ models | length }} total registered — table ignores chart filters)</span></h2>
+  <table class="table">
+    <thead>
+      <tr>
+        <th>Algorithm</th><th>Family</th><th>State</th>
+        <th>Wins</th><th>Runs entered</th><th>Win rate</th>
+        <th>Avg MAE</th><th>Avg RMSE</th><th>Avg train time</th>
+        <th>Per-metric eligibility</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for row in models %}
+      <tr>
+        <td><span class="pill">{{ row.algo }}</span></td>
+        <td><span class="pill pill-muted">{{ row.family }}</span></td>
+        <td>
+          {% if row.state == 'enabled' %}<span class="pill pill-good">enabled</span>
+          {% else %}<span class="pill pill-muted">disabled</span>{% endif %}
+        </td>
+        <td class="num">{{ row.wins or 0 }}</td>
+        <td class="num">{{ row.runs or 0 }}</td>
+        <td class="num">{{ "%.1f%%"|format((row.win_rate or 0) * 100) if row.runs else '—' }}</td>
+        <td class="num">{{ "%.3f"|format(row.avg_mae) if row.avg_mae is not none else '—' }}</td>
+        <td class="num">{{ "%.3f"|format(row.avg_rmse) if row.avg_rmse is not none else '—' }}</td>
+        <td class="num">{{ "%.1fs"|format(row.avg_train_duration) if row.avg_train_duration is not none else '—' }}</td>
+        <td class="sub">{{ row.eligible_metrics | join(', ') if row.eligible_metrics else 'all' }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</section>
 
 <script>
 const ROWS = {{ rows_json|safe }};
@@ -174,7 +194,7 @@ const PER_METRIC = {{ per_metric_wins_json|safe }};
 const FAMILY_ROLL = {{ family_roll_json|safe }};
 
 const FAMILY_COLORS = {
-  baseline: "#94a3b8",
+  baseline: "#93a0bd",
   statistical: "#38bdf8",
   ml: "#22c55e",
   "deep-learning": "#a78bfa",
@@ -204,9 +224,9 @@ function hBarOptions(xLabel) {
     plugins: { legend: { display: false } },
     scales: {
       x: { beginAtZero: true,
-           ticks: { color: "#94a3b8" },
+           ticks: { color: "#93a0bd" },
            grid: { color: "rgba(255,255,255,.05)" },
-           title: { display: !!xLabel, text: xLabel || "", color: "#94a3b8" } },
+           title: { display: !!xLabel, text: xLabel || "", color: "#93a0bd" } },
       y: { ticks: { color: "#cbd5e1", autoSkip: false },
            grid: { color: "rgba(255,255,255,.05)" } },
     },
@@ -241,7 +261,6 @@ document.addEventListener("DOMContentLoaded", () => {
   for (const m of metrics) {
     for (const [a, n] of Object.entries(PER_METRIC[m] || {})) totalWins[a] = (totalWins[a] || 0) + n;
   }
-  // Restrict to algos that survived our filter (intersect with ROWS)
   const rowAlgos = new Set(ROWS.map(r => r.algo));
   const wbmAlgos = Object.keys(totalWins)
     .filter(a => totalWins[a] > 0 && rowAlgos.has(a))
@@ -316,7 +335,7 @@ document.addEventListener("DOMContentLoaded", () => {
         datasets: [{
           data: FAMILY_ROLL.map(r => r.wins),
           backgroundColor: FAMILY_ROLL.map(r => FAMILY_COLORS[r.family] || "#facc15"),
-          borderColor: "#0b1220", borderWidth: 1,
+          borderColor: "#07101e", borderWidth: 1,
         }],
       },
       options: { responsive: true, maintainAspectRatio: false,

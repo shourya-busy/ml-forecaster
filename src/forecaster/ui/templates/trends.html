@@ -1,25 +1,32 @@
 {% extends "base.html" %}
 {% block title %}Trends{% endblock %}
 {% block content %}
-<h1>Trends</h1>
-<p class="subtitle">Aggregate forecast trajectory + accuracy drift for one (metric, horizon) over a time window.</p>
+<div class="page-header">
+  <div class="page-header-text">
+    <h1>Trends</h1>
+    <p class="subtitle">Aggregate forecast trajectory + accuracy drift for one (metric, horizon) over a time window.</p>
+  </div>
+</div>
 
-<form class="filterbar" method="get">
-  <label>Metric
+<form class="toolbar" method="get">
+  <label class="field-inline">
+    <span class="sub">Metric</span>
     <select name="metric" onchange="this.form.submit()">
       {% for m in metrics %}
       <option value="{{ m }}" {% if m == selected_metric %}selected{% endif %}>{{ m }}</option>
       {% endfor %}
     </select>
   </label>
-  <label>Horizon
+  <label class="field-inline">
+    <span class="sub">Horizon</span>
     <select name="horizon" onchange="this.form.submit()">
       {% for h in horizons %}
       <option value="{{ h }}" {% if h == selected_horizon %}selected{% endif %}>{{ h }}</option>
       {% endfor %}
     </select>
   </label>
-  <label>Window
+  <label class="field-inline">
+    <span class="sub">Window</span>
     <select name="window" onchange="this.form.submit()">
       {% for w in window_presets %}
       <option value="{{ w }}" {% if w == selected_window %}selected{% endif %}>last {{ w }}</option>
@@ -27,36 +34,38 @@
       <option value="all" {% if selected_window == 'all' %}selected{% endif %}>all history</option>
     </select>
   </label>
-  <label>Aggregation
+  <label class="field-inline">
+    <span class="sub">Aggregation</span>
     <select name="agg" onchange="this.form.submit()">
       <option value="mean" {% if selected_agg == 'mean' %}selected{% endif %}>mean</option>
       <option value="median" {% if selected_agg == 'median' %}selected{% endif %}>median (robust)</option>
       <option value="p95" {% if selected_agg == 'p95' %}selected{% endif %}>p95</option>
     </select>
   </label>
-  <label>Forecast freshness (h)
+  <label class="field-inline">
+    <span class="sub">Forecast freshness (h)</span>
     <input type="number" name="fresh_hours" value="{{ fresh_hours }}" min="0" max="720" style="width: 80px">
   </label>
   <button class="btn" type="submit">Apply</button>
-  <a class="btn secondary" href="{{ url_for('ui_trends') }}">Reset</a>
+  <a class="btn btn-secondary" href="{{ url_for('ui_trends') }}">Reset</a>
 </form>
 
-<p class="subtitle" style="margin-top: 10px">
+<p class="subtitle" style="margin-bottom: var(--space-4)">
   Showing <strong>{{ selected_agg }}</strong> of {{ instance_count }} instance(s) over the last
   <strong>{{ selected_window }}</strong>, restricted to forecasts whose run completed in the last
   <strong>{{ fresh_hours }}h</strong>. Drift line uses {{ drift_sample_size }} completed run(s).
 </p>
 
-<div class="two-col" style="margin-top: 14px">
+<div class="chart-grid-2">
   <div class="chart-card">
-    <div class="chart-title">
+    <div class="chart-card-head">
       <h3>Forecast trajectory — {{ selected_metric }} / {{ selected_horizon }}</h3>
       <span class="sub">{{ selected_agg }} across {{ instance_count }} instance(s)</span>
     </div>
     <canvas id="fcCurve"></canvas>
   </div>
   <div class="chart-card">
-    <div class="chart-title">
+    <div class="chart-card-head">
       <h3>Winner share — {{ selected_window }}</h3>
       <span class="sub">historical ranking wins by algo for {{ selected_metric }} / {{ selected_horizon }}</span>
     </div>
@@ -64,8 +73,8 @@
   </div>
 </div>
 
-<div class="chart-card" style="margin-top: 14px">
-  <div class="chart-title">
+<div class="chart-card" style="margin-top: var(--space-4)">
+  <div class="chart-card-head">
     <h3>Accuracy drift — winning model MAE over time</h3>
     <span class="sub">{{ drift_sample_size }} completed run(s), oldest-first; daily median in the line</span>
   </div>
@@ -106,7 +115,7 @@ document.addEventListener("DOMContentLoaded", () => {
   } else {
     document.getElementById("fcCurve").parentElement.insertAdjacentHTML(
       "beforeend",
-      "<p class='sub' style='padding: 12px; color: var(--warn)'>No fresh forecasts in this window. Try widening the freshness threshold or run a training cycle.</p>");
+      "<p class='chart-empty' style='color: var(--warning)'>No fresh forecasts in this window. Try widening the freshness threshold or run a training cycle.</p>");
   }
 
   if (DRIFT_CURVE.length) {
@@ -143,7 +152,7 @@ document.addEventListener("DOMContentLoaded", () => {
         datasets: [{
           data: WINNER_SHARE.map(w => w.wins),
           backgroundColor: WINNER_SHARE.map(w => fc.colors.forAlgo(w.algo)),
-          borderColor: "#0b1220", borderWidth: 1,
+          borderColor: "#07101e", borderWidth: 1,
         }],
       },
       options: {
@@ -154,7 +163,7 @@ document.addEventListener("DOMContentLoaded", () => {
   } else {
     document.getElementById("winnerShare").parentElement.insertAdjacentHTML(
       "beforeend",
-      "<p class='sub' style='padding: 12px; color: var(--warn)'>No rankings in this window.</p>");
+      "<p class='chart-empty' style='color: var(--warning)'>No rankings in this window.</p>");
   }
 });
 </script>

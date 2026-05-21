@@ -1,119 +1,141 @@
 {% extends "base.html" %}
 {% block title %}Runs{% endblock %}
 {% block content %}
-<h1>Training runs</h1>
-<p class="subtitle">Most-recent first by default. Click any column header to sort. Date inputs are in {{ filters.since }} timezone.</p>
+<div class="page-header">
+  <div class="page-header-text">
+    <h1>Training runs</h1>
+    <p class="subtitle">Most-recent first by default. Click any column header to sort.</p>
+  </div>
+  <form class="page-actions" method="post" action="{{ url_for('ui_cancel_active_runs') }}"
+        onsubmit="return confirm('Cancel ALL pending / running runs? Already-completed runs are untouched.')">
+    <button class="btn btn-danger" type="submit">Cancel all active runs</button>
+  </form>
+</div>
 
-<form method="post" action="{{ url_for('ui_cancel_active_runs') }}" style="margin-bottom: 14px"
-      onsubmit="return confirm('Cancel ALL pending / running runs? Already-completed runs are untouched.')">
-  <button class="btn" style="background: var(--bad); color: white" type="submit">Cancel all active runs</button>
-  <span class="sub" style="margin-left: 10px">SIGTERMs every worker task in pending or running state</span>
-</form>
-
-<form class="filterbar" method="get">
-  <input type="text" name="instance" value="{{ filters.instance or '' }}" placeholder="instance contains…">
-  <select name="metric">
-    <option value="">all metrics</option>
-    {% for m in all_metrics %}
-    <option value="{{ m }}" {% if filters.metric == m %}selected{% endif %}>{{ m }}</option>
-    {% endfor %}
-  </select>
-  <select name="horizon">
-    <option value="">all horizons</option>
-    {% for h in all_horizons %}
-    <option value="{{ h }}" {% if filters.horizon == h %}selected{% endif %}>{{ h }}</option>
-    {% endfor %}
-  </select>
-  <select name="status">
-    <option value="">any status</option>
-    {% for s in ['completed','running','failed','pending'] %}
-    <option value="{{ s }}" {% if filters.status == s %}selected{% endif %}>{{ s }}</option>
-    {% endfor %}
-  </select>
-  <input type="datetime-local" name="since" value="{{ filters.since or '' }}" title="From (inclusive)">
-  <input type="datetime-local" name="until" value="{{ filters.until or '' }}" title="To (inclusive)">
-  <select name="limit">
-    {% for n in [50, 100, 200, 500, 1000] %}
-    <option value="{{ n }}" {% if filters.limit == n %}selected{% endif %}>{{ n }} rows</option>
-    {% endfor %}
-  </select>
+<form class="toolbar" method="get">
+  <label class="field-inline">
+    <input type="text" name="instance" value="{{ filters.instance or '' }}" placeholder="instance contains…">
+  </label>
+  <label class="field-inline">
+    <select name="metric">
+      <option value="">all metrics</option>
+      {% for m in all_metrics %}
+      <option value="{{ m }}" {% if filters.metric == m %}selected{% endif %}>{{ m }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label class="field-inline">
+    <select name="horizon">
+      <option value="">all horizons</option>
+      {% for h in all_horizons %}
+      <option value="{{ h }}" {% if filters.horizon == h %}selected{% endif %}>{{ h }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label class="field-inline">
+    <select name="status">
+      <option value="">any status</option>
+      {% for s in ['completed','running','failed','pending'] %}
+      <option value="{{ s }}" {% if filters.status == s %}selected{% endif %}>{{ s }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label class="field-inline">
+    <span class="sub">since</span>
+    <input type="datetime-local" name="since" value="{{ filters.since or '' }}" title="From (inclusive)">
+  </label>
+  <label class="field-inline">
+    <span class="sub">until</span>
+    <input type="datetime-local" name="until" value="{{ filters.until or '' }}" title="To (inclusive)">
+  </label>
+  <label class="field-inline">
+    <select name="limit">
+      {% for n in [50, 100, 200, 500, 1000] %}
+      <option value="{{ n }}" {% if filters.limit == n %}selected{% endif %}>{{ n }} rows</option>
+      {% endfor %}
+    </select>
+  </label>
   <input type="hidden" name="sort" value="{{ filters.sort }}">
   <input type="hidden" name="direction" value="{{ filters.direction }}">
   <button class="btn" type="submit">Apply</button>
-  <a class="btn secondary" href="{{ url_for('ui_runs') }}">Reset</a>
+  <a class="btn btn-secondary" href="{{ url_for('ui_runs') }}">Reset</a>
 </form>
 
 {% if error_groups %}
-<h2>Error groups (last 24h)</h2>
-<table>
-  <thead>
-    <tr><th>Count</th><th>First seen</th><th>Last seen</th><th>Sample instances</th><th>Signature</th></tr>
-  </thead>
-  <tbody>
-    {% for g in error_groups[:6] %}
-    <tr>
-      <td class="num"><span class="pill bad">{{ g.count }}</span></td>
-      <td class="code">{{ g.first_seen | to_local_short }}</td>
-      <td class="code">{{ g.last_seen | to_local_short }}</td>
-      <td class="code">{{ g.sample_instances | join(', ') }}</td>
-      <td class="code">{{ g.signature }}</td>
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
-<p class="subtitle" style="margin-top: 4px">
-  {{ error_groups | length }} distinct error signature(s) in the last 24h. Use the filter bar above (status = failed) to drill into individual rows.
-</p>
+<section class="section">
+  <h2>Error groups <span class="sub">(last 24h)</span></h2>
+  <table class="table">
+    <thead>
+      <tr><th>Count</th><th>First seen</th><th>Last seen</th><th>Sample instances</th><th>Signature</th></tr>
+    </thead>
+    <tbody>
+      {% for g in error_groups[:6] %}
+      <tr>
+        <td class="num"><span class="pill pill-bad">{{ g.count }}</span></td>
+        <td class="code">{{ g.first_seen | to_local_short }}</td>
+        <td class="code">{{ g.last_seen | to_local_short }}</td>
+        <td class="code">{{ g.sample_instances | join(', ') }}</td>
+        <td class="code">{{ g.signature }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <p class="table-summary">
+    {{ error_groups | length }} distinct error signature(s) in the last 24h. Filter status = failed above to drill into individual rows.
+  </p>
+</section>
 {% endif %}
 
-<h2>Runs</h2>
-<table>
-  <thead>
-    <tr>
-      {% macro sortable(col, label) -%}
-        {% set is_active = (filters.sort == col) %}
-        {% set next_dir = 'asc' if (is_active and filters.direction == 'desc') else 'desc' %}
-        {% set arrow = '↓' if (is_active and filters.direction == 'desc') else ('↑' if is_active else '') %}
-        <th>
-          <a href="?{% for k,v in filters.items() if v and k not in ('sort','direction') %}{{ k }}={{ v }}&{% endfor %}sort={{ col }}&direction={{ next_dir }}"
-             style="color: inherit; {% if is_active %}font-weight: 700;{% endif %}">
-            {{ label }} {{ arrow }}
-          </a>
-        </th>
-      {%- endmacro %}
-      {{ sortable('id', 'ID') }}
-      {{ sortable('instance', 'Instance') }}
-      {{ sortable('metric', 'Metric') }}
-      {{ sortable('horizon', 'Horizon') }}
-      {{ sortable('status', 'Status') }}
-      {{ sortable('started_at', 'Started') }}
-      {{ sortable('completed_at', 'Completed') }}
-      {{ sortable('duration_seconds', 'Duration') }}
-      <th>Error</th>
-    </tr>
-  </thead>
-  <tbody>
-  {% for r in runs %}
-    <tr>
-      <td><a href="{{ url_for('ui_run_detail', run_id=r.id) }}">#{{ r.id }}</a></td>
-      <td class="code"><a href="{{ url_for('ui_instance_detail', instance=r.instance) }}">{{ r.instance }}</a></td>
-      <td>{{ r.metric }}</td>
-      <td>{{ r.horizon }}</td>
-      <td>
-        {% if r.status == 'completed' %}<span class="pill good">completed</span>
-        {% elif r.status == 'running' %}<span class="pill warn">running</span>
-        {% elif r.status == 'failed' %}<span class="pill bad">failed</span>
-        {% else %}<span class="pill muted">{{ r.status }}</span>{% endif %}
-      </td>
-      <td class="code">{{ r.started_at | to_local_short }}</td>
-      <td class="code">{{ r.completed_at | to_local_short }}</td>
-      <td class="num">{{ "%.1fs"|format(r.duration_seconds or 0) }}</td>
-      <td class="sub">{{ (r.error or '')[:80] }}</td>
-    </tr>
-  {% else %}
-    <tr><td colspan="9" class="sub">No runs match the filter.</td></tr>
-  {% endfor %}
-  </tbody>
-</table>
-<p class="subtitle" style="margin-top: 14px">{{ runs | length }} row(s) returned (sort: {{ filters.sort }} {{ filters.direction }}, limit: {{ filters.limit }}).</p>
+<section class="section">
+  <h2>Runs</h2>
+  <table class="table">
+    <thead>
+      <tr>
+        {% macro sortable(col, label) -%}
+          {% set is_active = (filters.sort == col) %}
+          {% set next_dir = 'asc' if (is_active and filters.direction == 'desc') else 'desc' %}
+          {% set arrow = '↓' if (is_active and filters.direction == 'desc') else ('↑' if is_active else '') %}
+          <th>
+            <a href="?{% for k,v in filters.items() if v and k not in ('sort','direction') %}{{ k }}={{ v }}&{% endfor %}sort={{ col }}&direction={{ next_dir }}"
+              {% if is_active %}class="is-active"{% endif %}>
+              {{ label }} {{ arrow }}
+            </a>
+          </th>
+        {%- endmacro %}
+        {{ sortable('id', 'ID') }}
+        {{ sortable('instance', 'Instance') }}
+        {{ sortable('metric', 'Metric') }}
+        {{ sortable('horizon', 'Horizon') }}
+        {{ sortable('status', 'Status') }}
+        {{ sortable('started_at', 'Started') }}
+        {{ sortable('completed_at', 'Completed') }}
+        {{ sortable('duration_seconds', 'Duration') }}
+        <th>Error</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for r in runs %}
+      <tr>
+        <td><a href="{{ url_for('ui_run_detail', run_id=r.id) }}">#{{ r.id }}</a></td>
+        <td class="code"><a href="{{ url_for('ui_instance_detail', instance=r.instance) }}">{{ r.instance }}</a></td>
+        <td>{{ r.metric }}</td>
+        <td>{{ r.horizon }}</td>
+        <td>
+          {% if r.status == 'completed' %}<span class="pill pill-good">completed</span>
+          {% elif r.status == 'running' %}<span class="pill pill-warn">running</span>
+          {% elif r.status == 'failed' %}<span class="pill pill-bad">failed</span>
+          {% else %}<span class="pill pill-muted">{{ r.status }}</span>{% endif %}
+        </td>
+        <td class="code">{{ r.started_at | to_local_short }}</td>
+        <td class="code">{{ r.completed_at | to_local_short }}</td>
+        <td class="num">{{ "%.1fs"|format(r.duration_seconds or 0) }}</td>
+        <td class="sub">{{ (r.error or '')[:80] }}</td>
+      </tr>
+    {% else %}
+      <tr><td colspan="9" class="t-empty">No runs match the filter.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  <p class="table-summary">{{ runs | length }} row(s) returned · sort: {{ filters.sort }} {{ filters.direction }} · limit: {{ filters.limit }}.</p>
+</section>
 {% endblock %}

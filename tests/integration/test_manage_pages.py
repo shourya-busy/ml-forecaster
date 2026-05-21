@@ -155,5 +155,7 @@ def test_nav_shows_new_tabs(tmp_path: Path, monkeypatch):
     _setup(tmp_path, monkeypatch)
     client = _client()
     body = client.get("/ui/").text
-    for tab in ["Schedule", "Manage", "Compare", "Trends"]:
+    # The sidebar reorganised the flat nav into 5 groups; the labels below
+    # must all be present as link text somewhere in the sidebar.
+    for tab in ["Schedule", "Settings", "Compare", "Trends"]:
         assert tab in body

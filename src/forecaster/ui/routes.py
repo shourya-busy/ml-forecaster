@@ -82,6 +82,18 @@ templates.env.filters["to_local"] = to_local
 templates.env.filters["to_local_short"] = to_local_short
 templates.env.filters["to_local_date"] = to_local_date
 
+
+def _is_training_paused() -> bool:
+    """Sidebar-readable training status. Lazy because the value can change
+    between requests via /ui/training/pause and /ui/training/resume."""
+    try:
+        return bool(get_settings().training.paused)
+    except Exception:  # noqa: BLE001
+        return False
+
+
+templates.env.globals["is_training_paused"] = _is_training_paused
+
 router = APIRouter(prefix="/ui", tags=["ui"])
 
 # Exported so the app factory can mount static files at /ui/static

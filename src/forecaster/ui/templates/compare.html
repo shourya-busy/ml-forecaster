@@ -1,11 +1,16 @@
 {% extends "base.html" %}
 {% block title %}Compare targets{% endblock %}
 {% block content %}
-<h1>Compare two targets</h1>
-<p class="subtitle">Pick any two (instance × metric × horizon) tuples and overlay their forecasts + MAE history on the same axes. Narrow the picker with the metric / horizon filters if your fleet is large.</p>
+<div class="page-header">
+  <div class="page-header-text">
+    <h1>Compare two targets</h1>
+    <p class="subtitle">Pick any two (instance × metric × horizon) tuples and overlay their forecasts + MAE history on the same axes. Narrow the picker with the metric / horizon filters if your fleet is large.</p>
+  </div>
+</div>
 
-<form class="filterbar" method="get">
-  <label>Metric
+<form class="toolbar" method="get">
+  <label class="field-inline">
+    <span class="sub">Metric</span>
     <select name="metric">
       <option value="">all</option>
       {% for m in metrics %}
@@ -13,7 +18,8 @@
       {% endfor %}
     </select>
   </label>
-  <label>Horizon
+  <label class="field-inline">
+    <span class="sub">Horizon</span>
     <select name="horizon">
       <option value="">all</option>
       {% for h in horizons %}
@@ -21,7 +27,8 @@
       {% endfor %}
     </select>
   </label>
-  <label>A
+  <label class="field-inline">
+    <span class="sub">A</span>
     <select name="a">
       <option value="">— pick —</option>
       {% for o in options %}
@@ -29,7 +36,8 @@
       {% endfor %}
     </select>
   </label>
-  <label>B
+  <label class="field-inline">
+    <span class="sub">B</span>
     <select name="b">
       <option value="">— pick —</option>
       {% for o in options %}
@@ -37,7 +45,8 @@
       {% endfor %}
     </select>
   </label>
-  <label>MAE samples
+  <label class="field-inline">
+    <span class="sub">MAE samples</span>
     <select name="limit">
       {% for n in [10, 25, 50, 100, 200, 500] %}
       <option value="{{ n }}" {% if limit == n %}selected{% endif %}>{{ n }}</option>
@@ -45,40 +54,42 @@
     </select>
   </label>
   <button class="btn" type="submit">Compare</button>
-  <a class="btn secondary" href="{{ url_for('ui_compare') }}">Reset</a>
+  <a class="btn btn-secondary" href="{{ url_for('ui_compare') }}">Reset</a>
 </form>
-<p class="subtitle" style="margin: -4px 0 14px">Picker shows {{ options | length }} of {{ all_options_count }} targets after filters.</p>
+<p class="sub" style="margin-bottom: var(--space-4)">Picker shows {{ options | length }} of {{ all_options_count }} targets after filters.</p>
 
 {% if a or b %}
-<div class="two-col">
+<div class="chart-grid-2">
   <div class="chart-card">
-    <div class="chart-title"><h3>Forecast (best model)</h3>
-      <span class="sub">{{ a.label if a else '—' }} <span style="color: var(--accent)">●</span> · {{ b.label if b else '—' }} <span style="color: var(--accent-2)">●</span></span>
+    <div class="chart-card-head"><h3>Forecast (best model)</h3>
+      <span class="sub">{{ a.label if a else '—' }} <span style="color: var(--primary)">●</span> · {{ b.label if b else '—' }} <span style="color: var(--accent-2)">●</span></span>
     </div>
     <canvas id="forecastCmp"></canvas>
   </div>
   <div class="chart-card">
-    <div class="chart-title"><h3>MAE over time</h3></div>
+    <div class="chart-card-head"><h3>MAE over time</h3></div>
     <canvas id="maeCmp"></canvas>
   </div>
 </div>
 
-<h2>Side-by-side summary</h2>
-<table>
-  <thead><tr><th></th><th>A</th><th>B</th></tr></thead>
-  <tbody>
-    <tr><td>Target</td><td>{{ a.label if a else '—' }}</td><td>{{ b.label if b else '—' }}</td></tr>
-    <tr><td>Current winner</td>
-        <td><span class="pill good">{{ a.winner if a else '—' }}</span></td>
-        <td><span class="pill good">{{ b.winner if b else '—' }}</span></td></tr>
-    <tr><td>Forecast points</td>
-        <td class="num">{{ a.forecast|length if a else 0 }}</td>
-        <td class="num">{{ b.forecast|length if b else 0 }}</td></tr>
-    <tr><td>MAE samples</td>
-        <td class="num">{{ a.score_history|length if a else 0 }}</td>
-        <td class="num">{{ b.score_history|length if b else 0 }}</td></tr>
-  </tbody>
-</table>
+<section class="section">
+  <h2>Side-by-side summary</h2>
+  <table class="table">
+    <thead><tr><th></th><th>A</th><th>B</th></tr></thead>
+    <tbody>
+      <tr><td>Target</td><td>{{ a.label if a else '—' }}</td><td>{{ b.label if b else '—' }}</td></tr>
+      <tr><td>Current winner</td>
+          <td><span class="pill pill-good">{{ a.winner if a else '—' }}</span></td>
+          <td><span class="pill pill-good">{{ b.winner if b else '—' }}</span></td></tr>
+      <tr><td>Forecast points</td>
+          <td class="num">{{ a.forecast|length if a else 0 }}</td>
+          <td class="num">{{ b.forecast|length if b else 0 }}</td></tr>
+      <tr><td>MAE samples</td>
+          <td class="num">{{ a.score_history|length if a else 0 }}</td>
+          <td class="num">{{ b.score_history|length if b else 0 }}</td></tr>
+    </tbody>
+  </table>
+</section>
 
 <script>
 const A = {{ a_json|safe }};
@@ -96,7 +107,6 @@ function fmtTs(iso) {
 }
 
 document.addEventListener("DOMContentLoaded", () => {
-  // Forecast overlay (point only — bands hidden to keep it readable)
   const fcCtx = document.getElementById("forecastCmp");
   if (fcCtx) {
     const allTs = [...new Set([
@@ -126,7 +136,6 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  // MAE overlay
   const maeCtx = document.getElementById("maeCmp");
   if (maeCtx) {
     const aHist = (A && A.score_history) || [];
@@ -152,8 +161,8 @@ document.addEventListener("DOMContentLoaded", () => {
       options: {
         ...fc.commonChartOptions("MAE"),
         scales: {
-          x: { type: "category", ticks: { color: "#94a3b8", callback: function(v, i){ try { return fmtTs(this.getLabelForValue(v)); } catch(_) { return v;} } }, grid: { color: "rgba(255,255,255,.05)" } },
-          y: { ticks: { color: "#94a3b8" }, grid: { color: "rgba(255,255,255,.05)" }, title: { display: true, text: "MAE", color: "#94a3b8" } },
+          x: { type: "category", ticks: { color: "#93a0bd", callback: function(v, i){ try { return fmtTs(this.getLabelForValue(v)); } catch(_) { return v;} } }, grid: { color: "rgba(255,255,255,.05)" } },
+          y: { ticks: { color: "#93a0bd" }, grid: { color: "rgba(255,255,255,.05)" }, title: { display: true, text: "MAE", color: "#93a0bd" } },
         },
       },
     });
@@ -161,6 +170,8 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 </script>
 {% else %}
-<p class="sub" style="margin-top: 20px">Pick A and B from the dropdowns to see the comparison.</p>
+<div class="empty" style="margin-top: var(--space-6)">
+  <div class="empty-title">Pick A and B from the dropdowns to see the comparison.</div>
+</div>
 {% endif %}
 {% endblock %}

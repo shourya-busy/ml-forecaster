@@ -1,40 +1,40 @@
 {% extends "base.html" %}
 {% block title %}Overview{% endblock %}
 {% block content %}
-<h1>System overview</h1>
-<p class="subtitle">Health of the forecaster setup at a glance. Auto-refreshes every 30s.</p>
+<div class="page-header">
+  <div class="page-header-text">
+    <h1>System overview</h1>
+    <p class="subtitle">Health of the forecaster setup at a glance. Auto-refreshes every 30s.</p>
+  </div>
+</div>
 
-<div class="card" style="margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;
-                        {% if stats.training_paused %}border-color: var(--warn); background: rgba(234,179,8,.08);{% endif %}">
-  <div>
-    <div class="label">Training control</div>
-    <div class="value" style="font-size: 22px">
-      {% if stats.training_paused %}<span style="color: var(--warn)">⏸ PAUSED</span>
-      {% else %}<span style="color: var(--good)">▶ active</span>{% endif %}
+<div class="notice {% if stats.training_paused %}notice-warn{% else %}notice-good{% endif %}">
+  <div style="flex:1">
+    <div class="notice-title">
+      {% if stats.training_paused %}⏸ Training paused{% else %}▶ Training active{% endif %}
     </div>
     <div class="sub">
       {% if stats.training_paused %}
-        Scheduled fan-outs and per-target crons are suppressed. Manual triggers from
-        Target Detail still work.
+        Scheduled fan-outs and per-target crons are suppressed. Manual triggers from Target Detail still work.
       {% else %}
         Scheduler is firing horizon crons normally. {{ stats.active_runs }} run(s) currently in flight.
       {% endif %}
     </div>
   </div>
-  <div style="display: flex; gap: 8px">
+  <div class="page-actions">
     {% if stats.training_paused %}
     <form method="post" action="{{ url_for('ui_training_resume') }}">
-      <button class="btn" type="submit" style="background: var(--good); color: #0b1220">▶ Start all training</button>
+      <button class="btn btn-success" type="submit">▶ Start all training</button>
     </form>
     {% else %}
     <form method="post" action="{{ url_for('ui_training_pause') }}"
           onsubmit="return confirm('Pause all scheduled training? Already-running jobs continue; the next scheduler tick will be suppressed.')">
-      <button class="btn" type="submit" style="background: var(--warn); color: #0b1220">⏸ Stop all training</button>
+      <button class="btn btn-warn" type="submit">⏸ Stop all training</button>
     </form>
     {% endif %}
     <form method="post" action="{{ url_for('ui_cancel_active_runs') }}"
           onsubmit="return confirm('Cancel all pending / running runs?')">
-      <button class="btn secondary" type="submit">Cancel active ({{ stats.active_runs }})</button>
+      <button class="btn btn-secondary" type="submit">Cancel active ({{ stats.active_runs }})</button>
     </form>
   </div>
 </div>
@@ -43,14 +43,18 @@
   {% include "_overview_cards.html" %}
 </div>
 
-<h2>Recent training runs</h2>
-<div hx-get="{{ url_for('ui_recent_runs_fragment') }}" hx-trigger="load, every 30s" hx-swap="innerHTML">
-  <table><thead><tr><th>—</th></tr></thead><tbody><tr><td>loading…</td></tr></tbody></table>
-</div>
+<section class="section">
+  <h2>Recent training runs</h2>
+  <div hx-get="{{ url_for('ui_recent_runs_fragment') }}" hx-trigger="load, every 30s" hx-swap="innerHTML">
+    <table class="table"><thead><tr><th>—</th></tr></thead><tbody><tr><td class="t-empty">loading…</td></tr></tbody></table>
+  </div>
+</section>
 
-<h2>Targets needing attention</h2>
-<p class="subtitle" style="margin-top:-8px">Where the ranking is flapping (≥3 distinct winners across the recent window) or no recent run exists.</p>
-<div hx-get="{{ url_for('ui_attention_fragment') }}" hx-trigger="load, every 60s" hx-swap="innerHTML">
-  <table><thead><tr><th>—</th></tr></thead><tbody><tr><td>loading…</td></tr></tbody></table>
-</div>
+<section class="section">
+  <h2>Targets needing attention</h2>
+  <p class="subtitle">Where the ranking is flapping (≥3 distinct winners across the recent window) or no recent run exists.</p>
+  <div hx-get="{{ url_for('ui_attention_fragment') }}" hx-trigger="load, every 60s" hx-swap="innerHTML">
+    <table class="table"><thead><tr><th>—</th></tr></thead><tbody><tr><td class="t-empty">loading…</td></tr></tbody></table>
+  </div>
+</section>
 {% endblock %}
