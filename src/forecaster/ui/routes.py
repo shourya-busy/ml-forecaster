@@ -263,6 +263,14 @@ def target_detail_page(
     )
     algos_history = sorted({r["winning_algo"] for r in winner_history})
 
+    # Latest run's training-data footprint (for the small inline summary on
+    # this page). winner_history is already oldest-first.
+    latest_data_stats: dict[str, Any] | None = None
+    if winner_history:
+        latest_run = repo.get_run(winner_history[-1]["run_id"])
+        if latest_run is not None and latest_run.data_stats:
+            latest_data_stats = dict(latest_run.data_stats)
+
     # Default lookback per horizon: enough past actual context that the
     # comparison is meaningful without flooding Prometheus.
     if lookback_hours is None:
@@ -344,6 +352,7 @@ def target_detail_page(
             "live_mae": live_mae,
             "live_count": live_count,
             "lookback_hours": effective_lookback_hours,
+            "latest_data_stats": latest_data_stats,
             "ranking": ranking_list,
             "ranking_json": json.dumps(ranking_list),
             "score_metrics": SCORE_METRICS,
@@ -819,12 +828,29 @@ def custom_run_delete(
 # Models
 # ============================================================
 
+_MODELS_SORT_KEYS = {
+    "win_rate": ("win_rate", True),
+    "wins": ("wins", True),
+    "runs": ("runs", True),
+    "avg_mae": ("avg_mae", False),       # lower is better
+    "avg_rmse": ("avg_rmse", False),
+    "avg_train_duration": ("avg_train_duration", False),
+    "algo": ("algo", False),
+}
+_FAMILY_ORDER = ["baseline", "statistical", "ml", "deep-learning", "other"]
+
+
 @router.get("/models", response_class=HTMLResponse, name="ui_models")
 def models_page(
     request: Request,
     metric: str | None = None,
     horizon: str | None = None,
     window: str = "all",
+    state: str | None = None,           # 'enabled' / 'disabled' / None=all
+    family: str | None = None,          # 'baseline' / 'statistical' / 'ml' / 'deep-learning' / None=all
+    min_runs: int = 0,
+    show_all: int = 0,                  # include 0-run algos in charts when 1
+    sort: str = "win_rate",
     repo: RegistryRepo = Depends(repo_dep),
     settings: Settings = Depends(settings_dep),
 ) -> HTMLResponse:
@@ -842,6 +868,7 @@ def models_page(
     by_algo = {row["algo"]: row for row in stats}
     rows: list[dict[str, Any]] = []
     for algo in sorted(REGISTRY.keys()):
+        info = algo_info(algo)
         row = by_algo.get(algo, {
             "algo": algo, "wins": 0, "runs": 0, "win_rate": 0.0,
             "avg_mae": None, "avg_rmse": None, "avg_train_duration": None,
@@ -849,27 +876,90 @@ def models_page(
         rows.append({
             **row,
             "state": "enabled" if algo in enabled else "disabled",
+            "family": info.get("family") or "other",
+            "complexity": info.get("complexity") or "",
+            "speed": info.get("speed") or "",
             "eligible_metrics": per_metric_eligibility.get(algo, []),
         })
+
+    # Filtered view (for the charts only — the details table always shows all)
+    filtered = list(rows)
+    if state in {"enabled", "disabled"}:
+        filtered = [r for r in filtered if r["state"] == state]
+    if family and family in (set(_FAMILY_ORDER) - {"other"}):
+        filtered = [r for r in filtered if r["family"] == family]
+    if min_runs > 0:
+        filtered = [r for r in filtered if (r["runs"] or 0) >= min_runs]
+    if not show_all:
+        filtered = [r for r in filtered if (r["runs"] or 0) > 0]
+
+    sort_key, sort_desc = _MODELS_SORT_KEYS.get(sort, _MODELS_SORT_KEYS["win_rate"])
+
+    def _key(r):
+        v = r.get(sort_key)
+        # Sort None last regardless of direction.
+        if v is None:
+            return (1, 0)
+        return (0, -v if sort_desc and isinstance(v, (int, float)) else v)
+
+    filtered.sort(key=_key)
+
+    # Summary cards across the filtered set
+    active_count = sum(1 for r in filtered if (r["runs"] or 0) > 0)
+    total_runs = sum(r["runs"] or 0 for r in filtered)
+    total_wins = sum(r["wins"] or 0 for r in filtered)
+    eligible_for_top = [r for r in filtered if (r["runs"] or 0) >= max(1, min_runs)]
+    top_performer = max(
+        eligible_for_top,
+        key=lambda r: (r["win_rate"] or 0, r["wins"] or 0),
+        default=None,
+    )
+
+    # Family roll-up donut data
+    family_wins: dict[str, int] = {}
+    for r in filtered:
+        family_wins[r["family"]] = family_wins.get(r["family"], 0) + (r["wins"] or 0)
+    family_roll = [
+        {"family": f, "wins": family_wins.get(f, 0)}
+        for f in _FAMILY_ORDER if family_wins.get(f, 0) > 0
+    ]
 
     return templates.TemplateResponse(
         request, "models.html",
         {
             "active": "models",
-            "models": rows,
+            "models": rows,                   # full table, every algo
+            "filtered_models": filtered,
             "metrics": list(settings.metrics_to_forecast.queries.keys()),
             "horizons": list(settings.horizons.keys()),
             "window_presets": list(_WINDOW_PRESETS.keys()),
+            "sort_options": list(_MODELS_SORT_KEYS.keys()),
+            "family_options": [f for f in _FAMILY_ORDER if f != "other"],
             "selected_metric": metric, "selected_horizon": horizon,
             "selected_window": window,
+            "selected_state": state, "selected_family": family,
+            "selected_min_runs": int(min_runs),
+            "selected_show_all": bool(show_all),
+            "selected_sort": sort,
+            "summary": {
+                "registered": len(REGISTRY),
+                "active": active_count,
+                "total_runs": total_runs,
+                "total_wins": total_wins,
+                "top_algo": top_performer["algo"] if top_performer else None,
+                "top_win_rate": (top_performer["win_rate"] * 100) if top_performer else None,
+            },
             "rows_json": json.dumps([
-                {"algo": r["algo"], "wins": r["wins"], "runs": r["runs"],
-                 "win_rate": r["win_rate"]}
-                for r in rows
+                {"algo": r["algo"], "wins": r["wins"] or 0, "runs": r["runs"] or 0,
+                 "win_rate": r["win_rate"] or 0,
+                 "avg_mae": r["avg_mae"], "avg_train_duration": r["avg_train_duration"],
+                 "family": r["family"]}
+                for r in filtered
             ]),
             "per_metric_wins_json": json.dumps(
                 repo.wins_by_metric(metric=metric, horizon=horizon, since=since),
             ),
+            "family_roll_json": json.dumps(family_roll),
         },
     )
 
@@ -941,10 +1031,20 @@ def schedule_page(
             )
         except Exception:  # noqa: BLE001
             n_points = 0
+        lookback = spec.lookback_days or settings.training.lookback_days
+        try:
+            import pandas as _pd
+            training_points = int(
+                _pd.Timedelta(days=lookback)
+                / _pd.Timedelta(spec.step.replace("d", "D"))
+            )
+        except Exception:  # noqa: BLE001
+            training_points = 0
         horizons_data.append({
             "name": name, "step": spec.step, "horizon": spec.horizon,
-            "lookback_days": spec.lookback_days or settings.training.lookback_days,
+            "lookback_days": lookback,
             "points_predicted": n_points,
+            "training_points_per_run": training_points,
             "retrain": spec.retrain, "next_fires": fires, "error": log_err,
         })
         for ts in fires:

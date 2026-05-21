@@ -10,7 +10,7 @@
   <input type="hidden" name="horizon" value="{{ h.name }}">
   <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 10px; flex-wrap: wrap">
     <strong style="font-size: 16px">{{ h.name }}</strong>
-    <span class="sub">step <code>{{ h.step }}</code> · forecast <code>{{ h.horizon }}</code> · lookback <code>{{ h.lookback_days }}d</code> · {{ h.points_predicted }} points predicted</span>
+    <span class="sub">step <code>{{ h.step }}</code> · forecast <code>{{ h.horizon }}</code> · lookback <code>{{ h.lookback_days }}d</code> · {{ h.points_predicted }} points predicted · ~{{ "{:,}".format(h.training_points_per_run) }} pts/run/target trained on</span>
   </div>
   <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(160px, 1fr))">
     <label>Retrain cron <span class="sub">({{ display_tz }})</span>

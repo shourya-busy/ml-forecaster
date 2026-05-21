@@ -69,6 +69,47 @@
 <p class="sub">No scored algos yet.</p>
 {% endif %}
 
+{% if run.data_stats %}
+{% set ds = run.data_stats %}
+<h2>Training data footprint</h2>
+<div class="grid">
+  <div class="card">
+    <div class="label">Points fed to models</div>
+    <div class="value">{{ "{:,}".format(ds.used_points or 0) }}</div>
+    <div class="sub">
+      {% if ds.dropped_by_filter %}
+        from {{ "{:,}".format(ds.fetched_points or 0) }} fetched · {{ ds.dropped_by_filter }} dropped by anomaly filter
+      {% else %}
+        fetched at {{ ds.step }} step
+      {% endif %}
+    </div>
+  </div>
+  <div class="card">
+    <div class="label">Lookback configured</div>
+    <div class="value">{{ ds.lookback_days }}d</div>
+    <div class="sub">step: {{ ds.step }}</div>
+  </div>
+  <div class="card">
+    <div class="label">Window covered</div>
+    <div class="value" style="font-size: 18px">{{ "%.1f"|format((ds.span_seconds or 0) / 86400) }}d</div>
+    <div class="sub">{{ ds.first_ts | to_local_short }} → {{ ds.last_ts | to_local_short }}</div>
+  </div>
+  <div class="card">
+    <div class="label">Outlier filter</div>
+    <div class="value" style="font-size: 18px">
+      {% if ds.anomaly_filter_applied %}
+        <span style="color: var(--warn)">on</span>
+      {% else %}
+        <span style="color: var(--muted)">off</span>
+      {% endif %}
+    </div>
+    <div class="sub">
+      {% if ds.anomaly_filter_applied %}{{ ds.dropped_by_filter }} point(s) dropped{% else %}no preprocessing{% endif %}
+    </div>
+  </div>
+</div>
+{% endif %}
+
 <h2>Backtest folds (how train/test was split)</h2>
 <p class="subtitle">
   Each algorithm above was evaluated with <strong>walk-forward cross-validation</strong>:

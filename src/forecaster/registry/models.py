@@ -54,6 +54,10 @@ class TrainingRun(Base):
     # Celery task id — set as soon as a task starts executing, so the UI
     # can revoke it via celery_app.control.revoke(...).
     celery_task_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    # Training-data footprint: {fetched_points, used_points, dropped_by_filter,
+    # first_ts, last_ts, span_seconds, step}. Captured by the pipeline so the
+    # UI can show "this run trained on N points spanning T".
+    data_stats: Mapped[dict | None] = mapped_column(JSON_FIELD, nullable=True)
 
     metrics: Mapped[list["RunMetric"]] = relationship(back_populates="run", cascade="all, delete-orphan")
     artifacts: Mapped[list["ModelArtifact"]] = relationship(back_populates="run", cascade="all, delete-orphan")

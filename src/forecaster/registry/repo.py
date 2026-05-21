@@ -597,6 +597,7 @@ class RegistryRepo:
                 "duration_seconds": run.duration_seconds,
                 "error": run.error,
                 "config_snapshot": run.config_snapshot or {},
+                "data_stats": run.data_stats or None,
             },
             "rows": [
                 {
@@ -920,6 +921,13 @@ class RegistryRepo:
             run = s.get(TrainingRun, run_id)
             if run is not None:
                 run.celery_task_id = task_id
+
+    def record_data_stats(self, run_id: int, stats: dict[str, Any]) -> None:
+        """Attach the training-data footprint to a run row."""
+        with self.session() as s:
+            run = s.get(TrainingRun, run_id)
+            if run is not None:
+                run.data_stats = dict(stats)
 
     def list_active_runs(self) -> list[TrainingRun]:
         with self.session() as s:

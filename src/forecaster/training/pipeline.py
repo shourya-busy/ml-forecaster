@@ -125,6 +125,9 @@ def run_pipeline(
         series = series.asfreq(pd.Timedelta(h.step)).interpolate("time").dropna()
         if len(series) < 50:
             raise RuntimeError(f"too few points after fetch+resample: {len(series)}")
+        fetched_points = len(series)
+        fetched_first = series.index[0]
+        fetched_last = series.index[-1]
 
         # Optional outlier scrubbing before training (Isolation Forest).
         # Per-run override wins over global settings.
@@ -136,6 +139,20 @@ def run_pipeline(
                 cleaned.asfreq(pd.Timedelta(h.step))
                 .interpolate("time").dropna()
             )
+
+        # Persist the data footprint so the UI can show "this run trained on
+        # N points spanning T₀-T₁ after dropping M anomalies".
+        repo.record_data_stats(run_id, {
+            "step": h.step,
+            "lookback_days": lookback,
+            "fetched_points": int(fetched_points),
+            "used_points": int(len(series)),
+            "dropped_by_filter": int(n_dropped),
+            "first_ts": fetched_first.isoformat() if fetched_first is not None else None,
+            "last_ts": fetched_last.isoformat() if fetched_last is not None else None,
+            "span_seconds": float((fetched_last - fetched_first).total_seconds()),
+            "anomaly_filter_applied": bool(active_af.enabled),
+        })
 
         horizon_steps = _horizon_steps(h.horizon, h.step)
         # Per-run algo override beats the per-metric shortlist beats the global enabled list.

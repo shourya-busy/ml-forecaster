@@ -15,18 +15,27 @@
   &nbsp;|&nbsp; <a href="{{ url_for('ui_targets') }}">← all targets</a>
 </p>
 
-{% if live_mae is not none %}
-<div class="card" style="margin-bottom: 14px">
-  <div class="label">Live forecast accuracy vs Prometheus actuals</div>
-  <div class="value" style="font-size: 22px">
-    MAE = {{ "%.3f"|format(live_mae) }}
-    <span class="sub" style="font-weight: normal">across {{ live_count }} overlapping point(s)</span>
+{% if live_mae is not none or latest_data_stats %}
+<div class="grid" style="margin-bottom: 14px">
+  {% if live_mae is not none %}
+  <div class="card">
+    <div class="label">Live MAE vs Prometheus actuals</div>
+    <div class="value">{{ "%.3f"|format(live_mae) }}</div>
+    <div class="sub">across {{ live_count }} overlapping point(s) — compare against backtest MAE below</div>
   </div>
-  <div class="sub">
-    Computed by re-querying the same PromQL used at training time for the
-    period this forecast already covers. Lower is better; compare against
-    the backtest MAE in the ranking table below.
+  {% endif %}
+  {% if latest_data_stats %}
+  <div class="card">
+    <div class="label">Latest training set</div>
+    <div class="value">{{ "{:,}".format(latest_data_stats.used_points or 0) }} pts</div>
+    <div class="sub">
+      {{ latest_data_stats.lookback_days }}d lookback @ {{ latest_data_stats.step }}
+      {% if latest_data_stats.dropped_by_filter %}
+        · {{ latest_data_stats.dropped_by_filter }} dropped by anomaly filter
+      {% endif %}
+    </div>
   </div>
+  {% endif %}
 </div>
 {% endif %}
 
