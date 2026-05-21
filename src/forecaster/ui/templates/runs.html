@@ -4,6 +4,12 @@
 <h1>Training runs</h1>
 <p class="subtitle">Most-recent first by default. Click any column header to sort. Date inputs are in {{ filters.since }} timezone.</p>
 
+<form method="post" action="{{ url_for('ui_cancel_active_runs') }}" style="margin-bottom: 14px"
+      onsubmit="return confirm('Cancel ALL pending / running runs? Already-completed runs are untouched.')">
+  <button class="btn" style="background: var(--bad); color: white" type="submit">Cancel all active runs</button>
+  <span class="sub" style="margin-left: 10px">SIGTERMs every worker task in pending or running state</span>
+</form>
+
 <form class="filterbar" method="get">
   <input type="text" name="instance" value="{{ filters.instance or '' }}" placeholder="instance contains…">
   <select name="metric">

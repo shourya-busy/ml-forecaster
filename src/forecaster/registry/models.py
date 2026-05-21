@@ -51,6 +51,9 @@ class TrainingRun(Base):
     duration_seconds: Mapped[float | None] = mapped_column(Float, nullable=True)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
     config_snapshot: Mapped[dict] = mapped_column(JSON_FIELD, default=dict)
+    # Celery task id — set as soon as a task starts executing, so the UI
+    # can revoke it via celery_app.control.revoke(...).
+    celery_task_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
 
     metrics: Mapped[list["RunMetric"]] = relationship(back_populates="run", cascade="all, delete-orphan")
     artifacts: Mapped[list["ModelArtifact"]] = relationship(back_populates="run", cascade="all, delete-orphan")
@@ -158,6 +161,28 @@ class SettingsOverride(Base):
     value: Mapped[Any] = mapped_column(JSON_FIELD)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
     updated_by: Mapped[str | None] = mapped_column(String(128), nullable=True)
+
+
+class CustomRunConfig(Base):
+    """Saved one-off training configurations the user can re-run from the
+    Custom Run panel. Distinct from `TargetOverride` (which sets *which
+    scheduler-driven* targets are active) — this stores *named templates*
+    you trigger manually."""
+
+    __tablename__ = "custom_run_configs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(128), unique=True, index=True)
+    instance: Mapped[str] = mapped_column(String(256))
+    metric: Mapped[str] = mapped_column(String(64))
+    horizon: Mapped[str] = mapped_column(String(32))
+    algorithms: Mapped[list[str] | None] = mapped_column(JSON_FIELD, nullable=True)
+    # Stored as a dict {enabled, contamination, window} or null = inherit.
+    anomaly_filter: Mapped[dict | None] = mapped_column(JSON_FIELD, nullable=True)
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    run_count: Mapped[int] = mapped_column(Integer, default=0)
 
 
 class TargetOverride(Base):

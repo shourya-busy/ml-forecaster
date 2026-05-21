@@ -30,18 +30,29 @@
 </div>
 {% endif %}
 
-<form method="post" action="{{ url_for('ui_trigger_run') }}" style="margin-bottom:18px">
-  <input type="hidden" name="instance" value="{{ instance }}">
-  <input type="hidden" name="metric" value="{{ metric }}">
-  <input type="hidden" name="horizon" value="{{ horizon }}">
-  <button class="btn" type="submit">Trigger a new training run</button>
-  <span class="sub">enqueued via Celery</span>
-</form>
+<div style="display: flex; gap: 14px; align-items: center; flex-wrap: wrap; margin-bottom: 18px">
+  <form method="post" action="{{ url_for('ui_trigger_run') }}">
+    <input type="hidden" name="instance" value="{{ instance }}">
+    <input type="hidden" name="metric" value="{{ metric }}">
+    <input type="hidden" name="horizon" value="{{ horizon }}">
+    <button class="btn" type="submit">Trigger a new training run</button>
+    <span class="sub">enqueued via Celery</span>
+  </form>
+
+  <form method="get" style="display: flex; gap: 6px; align-items: center">
+    <label class="sub" for="lookback">Actuals lookback (hours):</label>
+    <input id="lookback" type="number" name="lookback_hours" min="0" max="720"
+           value="{{ lookback_hours }}"
+           style="width: 90px; background: var(--panel-2); color: var(--text); border: 1px solid var(--border); padding: 4px 8px; border-radius: 4px">
+    <button class="btn secondary" type="submit" style="padding: 4px 10px">Apply</button>
+    <span class="sub">how much past Prometheus data to overlay; the forecast horizon ({{ horizon }}) is fixed by the trained model</span>
+  </form>
+</div>
 
 <div class="two-col">
   <div class="chart-card">
     <div class="chart-title"><h3>Forecast (best model)</h3>
-      <span class="sub">{{ forecasts|length }} future points</span></div>
+      <span class="sub">{{ forecasts|length }} future points · {{ lookback_hours }}h of past actuals</span></div>
     <canvas id="forecastChart"></canvas>
   </div>
   <div class="chart-card">

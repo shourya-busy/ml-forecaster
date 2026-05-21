@@ -44,12 +44,16 @@ def _repo() -> RegistryRepo:
 def fan_out(horizon: str) -> int:
     """Enqueue training tasks for one (horizon) tick. Returns the count.
 
-    Respects per-target overrides:
-      - Targets with `enabled=False` are skipped.
-      - Targets with a non-null `schedule_cron` are skipped here (they
-        are scheduled by their own per-target cron job in scheduler.py).
+    Respects:
+      - The global `training.paused` flag — when true, returns 0
+        immediately (manual triggers from the UI still work).
+      - Per-target `enabled=False` — skipped.
+      - Per-target `schedule_cron` — handled by its own cron job.
     """
     settings = get_settings()
+    if getattr(settings.training, "paused", False):
+        log.info("scheduler: training is PAUSED — fan_out(%s) suppressed", horizon)
+        return 0
     if horizon not in settings.horizons:
         raise KeyError(f"horizon '{horizon}' not configured")
     targets = discover_targets()
@@ -89,8 +93,13 @@ def fan_out(horizon: str) -> int:
 def fire_single_target(instance: str, metric: str, horizon: str) -> str | None:
     """Enqueue one training task for a per-target cron job.
 
-    Returns the Celery task id, or None if the target is disabled.
+    Returns the Celery task id, or None if the target is disabled or
+    training is globally paused.
     """
+    if getattr(get_settings().training, "paused", False):
+        log.info("per-target cron: training PAUSED — skipping %s/%s/%s",
+                 instance, metric, horizon)
+        return None
     repo = _repo()
     ov_map = repo.get_target_overrides_map()
     ov = ov_map.get((instance, metric, horizon))

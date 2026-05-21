@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from .models import (
     Base,
+    CustomRunConfig,
     Forecast,
     ModelArtifact,
     Ranking,
@@ -911,3 +912,113 @@ class RegistryRepo:
         with self.session() as s:
             row = s.get(TargetOverride, (instance, metric, horizon))
         return True if row is None else bool(row.enabled)
+
+    # ----- run lifecycle -----
+
+    def record_celery_task_id(self, run_id: int, task_id: str) -> None:
+        with self.session() as s:
+            run = s.get(TrainingRun, run_id)
+            if run is not None:
+                run.celery_task_id = task_id
+
+    def list_active_runs(self) -> list[TrainingRun]:
+        with self.session() as s:
+            return list(s.scalars(
+                select(TrainingRun)
+                .where(TrainingRun.status.in_(("pending", "running")))
+                .order_by(TrainingRun.started_at.desc())
+            ))
+
+    def mark_cancelled(self, run_id: int, reason: str = "cancelled via UI") -> TrainingRun | None:
+        with self.session() as s:
+            run = s.get(TrainingRun, run_id)
+            if run is None:
+                return None
+            run.status = "cancelled"
+            run.error = reason
+            completed = datetime.now(timezone.utc)
+            run.completed_at = completed
+            started = run.started_at
+            # SQLite strips tzinfo on round-trip; normalise both ends to UTC.
+            if started is not None and started.tzinfo is None:
+                started = started.replace(tzinfo=timezone.utc)
+            if started is not None:
+                delta = (completed - started).total_seconds()
+                if delta >= 0:
+                    run.duration_seconds = delta
+            return run
+
+    # ----- global pause flag -----
+
+    def is_training_paused(self) -> bool:
+        with self.session() as s:
+            row = s.get(SettingsOverride, "training.paused")
+        if row is None:
+            return False
+        return bool(row.value)
+
+    def set_training_paused(self, paused: bool, updated_by: str | None = None) -> None:
+        self.set_settings_override("training.paused", bool(paused), updated_by=updated_by)
+
+    # ----- custom run configs -----
+
+    def list_custom_configs(self) -> list[CustomRunConfig]:
+        with self.session() as s:
+            return list(s.scalars(
+                select(CustomRunConfig).order_by(CustomRunConfig.name.asc())
+            ))
+
+    def get_custom_config(self, config_id: int) -> CustomRunConfig | None:
+        with self.session() as s:
+            return s.get(CustomRunConfig, config_id)
+
+    def get_custom_config_by_name(self, name: str) -> CustomRunConfig | None:
+        with self.session() as s:
+            return s.scalar(select(CustomRunConfig).where(CustomRunConfig.name == name))
+
+    def upsert_custom_config(
+        self,
+        *,
+        name: str,
+        instance: str,
+        metric: str,
+        horizon: str,
+        algorithms: list[str] | None = None,
+        anomaly_filter: dict[str, Any] | None = None,
+        note: str | None = None,
+    ) -> CustomRunConfig:
+        with self.session() as s:
+            existing = s.scalar(select(CustomRunConfig).where(CustomRunConfig.name == name))
+            if existing:
+                existing.instance = instance
+                existing.metric = metric
+                existing.horizon = horizon
+                existing.algorithms = algorithms
+                existing.anomaly_filter = anomaly_filter
+                existing.note = note
+                s.flush()
+                return existing
+            row = CustomRunConfig(
+                name=name, instance=instance, metric=metric, horizon=horizon,
+                algorithms=algorithms, anomaly_filter=anomaly_filter, note=note,
+            )
+            s.add(row)
+            s.flush()
+            return row
+
+    def delete_custom_config(self, config_id: int) -> bool:
+        with self.session() as s:
+            row = s.get(CustomRunConfig, config_id)
+            if row is None:
+                return False
+            s.delete(row)
+            return True
+
+    def touch_custom_config(self, config_id: int) -> None:
+        """Bump run_count + last_used_at; called when a saved config is fired."""
+        with self.session() as s:
+            row = s.get(CustomRunConfig, config_id)
+            if row is None:
+                return
+            row.run_count = (row.run_count or 0) + 1
+            row.last_used_at = datetime.now(timezone.utc)

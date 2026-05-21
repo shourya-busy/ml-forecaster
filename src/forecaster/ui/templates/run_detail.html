@@ -14,6 +14,15 @@
   &nbsp;|&nbsp; <a href="{{ url_for('ui_target_detail', instance=run.instance, metric=run.metric, horizon=run.horizon) }}">target overview →</a>
 </p>
 
+{% if run.status in ('pending', 'running') %}
+<form method="post" action="{{ url_for('ui_cancel_run', run_id=run.id) }}"
+      style="margin: 0 0 14px"
+      onsubmit="return confirm('Cancel run #{{ run.id }}? The Celery worker will receive SIGTERM and the run will be marked cancelled.')">
+  <button class="btn" style="background: var(--bad); color: white" type="submit">Cancel this run</button>
+  <span class="sub" style="margin-left: 10px">revokes the Celery task and marks the run as cancelled</span>
+</form>
+{% endif %}
+
 {% if run.error %}
 <div class="card" style="border-color: var(--bad); margin-bottom: 16px">
   <div class="label">Error</div>

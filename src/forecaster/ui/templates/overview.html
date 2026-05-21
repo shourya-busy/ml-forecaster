@@ -4,6 +4,41 @@
 <h1>System overview</h1>
 <p class="subtitle">Health of the forecaster setup at a glance. Auto-refreshes every 30s.</p>
 
+<div class="card" style="margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;
+                        {% if stats.training_paused %}border-color: var(--warn); background: rgba(234,179,8,.08);{% endif %}">
+  <div>
+    <div class="label">Training control</div>
+    <div class="value" style="font-size: 22px">
+      {% if stats.training_paused %}<span style="color: var(--warn)">⏸ PAUSED</span>
+      {% else %}<span style="color: var(--good)">▶ active</span>{% endif %}
+    </div>
+    <div class="sub">
+      {% if stats.training_paused %}
+        Scheduled fan-outs and per-target crons are suppressed. Manual triggers from
+        Target Detail still work.
+      {% else %}
+        Scheduler is firing horizon crons normally. {{ stats.active_runs }} run(s) currently in flight.
+      {% endif %}
+    </div>
+  </div>
+  <div style="display: flex; gap: 8px">
+    {% if stats.training_paused %}
+    <form method="post" action="{{ url_for('ui_training_resume') }}">
+      <button class="btn" type="submit" style="background: var(--good); color: #0b1220">▶ Start all training</button>
+    </form>
+    {% else %}
+    <form method="post" action="{{ url_for('ui_training_pause') }}"
+          onsubmit="return confirm('Pause all scheduled training? Already-running jobs continue; the next scheduler tick will be suppressed.')">
+      <button class="btn" type="submit" style="background: var(--warn); color: #0b1220">⏸ Stop all training</button>
+    </form>
+    {% endif %}
+    <form method="post" action="{{ url_for('ui_cancel_active_runs') }}"
+          onsubmit="return confirm('Cancel all pending / running runs?')">
+      <button class="btn secondary" type="submit">Cancel active ({{ stats.active_runs }})</button>
+    </form>
+  </div>
+</div>
+
 <div hx-get="{{ url_for('ui_overview_cards') }}" hx-trigger="load, every 30s" hx-swap="innerHTML">
   {% include "_overview_cards.html" %}
 </div>

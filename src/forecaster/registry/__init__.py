@@ -1,5 +1,6 @@
 from .models import (
     Base,
+    CustomRunConfig,
     Forecast,
     ModelArtifact,
     Ranking,
@@ -14,6 +15,7 @@ from .store import ArtifactStore, VolumeArtifactStore
 __all__ = [
     "ArtifactStore",
     "Base",
+    "CustomRunConfig",
     "Forecast",
     "ModelArtifact",
     "Ranking",

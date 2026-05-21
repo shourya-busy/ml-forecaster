@@ -67,6 +67,10 @@ class TrainingConfig(BaseModel):
     confidence_alpha: float = 0.05  # for 95% intervals
     max_artifact_versions_kept: int = 3
     anomaly_filter: AnomalyFilter = Field(default_factory=AnomalyFilter)
+    # Global kill switch — scheduler-driven fan-out is suppressed when true.
+    # Per-target manual triggers (Trigger run button, POST /runs/sync) still
+    # work, so you can debug while everything else is frozen.
+    paused: bool = False
 
 
 # ---------- algorithms ----------

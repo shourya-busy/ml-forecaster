@@ -165,6 +165,8 @@ def _build_overview_stats(repo: RegistryRepo, settings: Settings) -> dict[str, A
         "flapping": flapping,
         "models_registered": len(REGISTRY),
         "models_enabled": len(settings.algorithms.enabled),
+        "training_paused": bool(settings.training.paused),
+        "active_runs": len(repo.list_active_runs()),
     }
 
 
@@ -222,6 +224,7 @@ def targets_page(
 @router.get("/targets/{instance}/{metric}/{horizon}", response_class=HTMLResponse, name="ui_target_detail")
 def target_detail_page(
     request: Request, instance: str, metric: str, horizon: str,
+    lookback_hours: int | None = None,
     repo: RegistryRepo = Depends(repo_dep),
     settings: Settings = Depends(settings_dep),
 ) -> HTMLResponse:
@@ -260,11 +263,18 @@ def target_detail_page(
     )
     algos_history = sorted({r["winning_algo"] for r in winner_history})
 
+    # Default lookback per horizon: enough past actual context that the
+    # comparison is meaningful without flooding Prometheus.
+    if lookback_hours is None:
+        defaults = {"short": 6, "medium": 24, "long": 168}
+        effective_lookback_hours = defaults.get(horizon, 24)
+    else:
+        effective_lookback_hours = max(0, int(lookback_hours))
+
     # ----- live forecast vs actual -----
-    # Re-fetch the actual metric values for the time window the forecast
-    # covers, so the user can eyeball how well the model is tracking the
-    # real series. Fails open: if the data source can't be reached, we
-    # just skip the overlay rather than 500-ing the page.
+    # Re-fetch the actual metric values for [now - lookback_hours, forecast_end]
+    # so the user sees both the recent past *and* the forecast band on one
+    # chart. Fails open: any data-source error just skips the overlay.
     actuals_data: list[dict[str, Any]] = []
     live_mae: float | None = None
     live_count = 0
@@ -275,17 +285,20 @@ def target_detail_page(
 
             query = settings.metrics_to_forecast.queries.get(metric)
             if query:
-                earliest = _pd.Timestamp(forecasts_data[0]["ts"])
-                latest = _pd.Timestamp(forecasts_data[-1]["ts"])
+                fc_first = _pd.Timestamp(forecasts_data[0]["ts"])
+                fc_last = _pd.Timestamp(forecasts_data[-1]["ts"])
                 now = _pd.Timestamp.now(tz="UTC")
-                end = min(latest, now)
-                if end > earliest:
+                # Pull from (now - lookback) to whichever forecast point
+                # has already occurred — that's the meaningful overlap.
+                start = min(fc_first, now - _pd.Timedelta(hours=effective_lookback_hours))
+                end = min(fc_last, now)
+                if end > start:
                     step = settings.horizons[horizon].step
                     ds = make_data_source(settings.data_sources)
                     try:
                         series_list = ds.fetch_range(
                             query,
-                            earliest.to_pydatetime(),
+                            start.to_pydatetime(),
                             end.to_pydatetime(),
                             step,
                             instance_label=settings.targets.instance_label,
@@ -296,14 +309,14 @@ def target_detail_page(
                     for s in series_list:
                         if s.instance != instance or s.df.empty:
                             continue
-                        # Match the forecast step alignment for cleaner overlay
                         snapped = s.df["value"].asfreq(_pd.Timedelta(step)).interpolate("time")
                         actuals_data = [
                             {"ts": idx.isoformat(), "value": _safe(float(v))}
                             for idx, v in snapped.dropna().items()
                         ]
                         break
-                    # Compute MAE over the overlapping window
+                    # Compute MAE only over the overlap with the forecast
+                    # window (we're not scoring the past, just the future).
                     if actuals_data:
                         fc_map = {p["ts"]: p["point"] for p in forecasts_data}
                         ac_map = {p["ts"]: p["value"] for p in actuals_data}
@@ -330,6 +343,7 @@ def target_detail_page(
             "actuals_json": json.dumps(actuals_data),
             "live_mae": live_mae,
             "live_count": live_count,
+            "lookback_hours": effective_lookback_hours,
             "ranking": ranking_list,
             "ranking_json": json.dumps(ranking_list),
             "score_metrics": SCORE_METRICS,
@@ -495,6 +509,310 @@ def run_detail_page(
             "config_snapshot_json": json.dumps(run["config_snapshot"], indent=2, default=str),
         },
     )
+
+
+# ============================================================
+# Cancellation endpoints
+# ============================================================
+
+@router.post("/runs/{run_id}/cancel", name="ui_cancel_run")
+def cancel_run(
+    request: Request, run_id: int,
+    repo: RegistryRepo = Depends(repo_dep),
+) -> RedirectResponse:
+    from ..training.tasks import revoke_task
+
+    with repo.session() as s:
+        from ..registry.models import TrainingRun
+        run = s.get(TrainingRun, run_id)
+        if run is None:
+            raise HTTPException(status_code=404, detail=f"run {run_id} not found")
+        task_id = run.celery_task_id
+        status = run.status
+    if status in ("completed", "failed", "cancelled"):
+        # Idempotent — already terminal, nothing to do.
+        return RedirectResponse(
+            url=str(request.url_for("ui_run_detail", run_id=run_id)),
+            status_code=303,
+        )
+    revoke_task(task_id)
+    repo.mark_cancelled(run_id, reason="cancelled via UI")
+    return RedirectResponse(
+        url=str(request.url_for("ui_run_detail", run_id=run_id)),
+        status_code=303,
+    )
+
+
+@router.post("/training/pause", name="ui_training_pause")
+def training_pause(
+    request: Request,
+    repo: RegistryRepo = Depends(repo_dep),
+) -> RedirectResponse:
+    repo.set_training_paused(True, updated_by="ui")
+    _invalidate()
+    log.info("training paused via UI")
+    return RedirectResponse(
+        url=request.headers.get("referer") or str(request.url_for("ui_overview")),
+        status_code=303,
+    )
+
+
+@router.post("/training/resume", name="ui_training_resume")
+def training_resume(
+    request: Request,
+    repo: RegistryRepo = Depends(repo_dep),
+) -> RedirectResponse:
+    repo.set_training_paused(False, updated_by="ui")
+    _invalidate()
+    log.info("training resumed via UI")
+    return RedirectResponse(
+        url=request.headers.get("referer") or str(request.url_for("ui_overview")),
+        status_code=303,
+    )
+
+
+@router.post("/runs/cancel-active", name="ui_cancel_active_runs")
+def cancel_active_runs(
+    request: Request,
+    repo: RegistryRepo = Depends(repo_dep),
+) -> RedirectResponse:
+    from ..training.tasks import revoke_task
+
+    active = repo.list_active_runs()
+    for run in active:
+        revoke_task(run.celery_task_id)
+        repo.mark_cancelled(run.id, reason="bulk cancel via UI")
+    log.info("bulk cancel: revoked %d active run(s)", len(active))
+    return RedirectResponse(
+        url=str(request.url_for("ui_runs")), status_code=303,
+    )
+
+
+# ============================================================
+# Custom Run panel
+# ============================================================
+
+def _algorithms_grouped(settings: Settings) -> list[tuple[str, list[str]]]:
+    info_map = {name: algo_info(name) for name in REGISTRY}
+    family_order = ["baseline", "statistical", "ml", "deep-learning"]
+    grouped: dict[str, list[str]] = {f: [] for f in family_order}
+    for name in sorted(REGISTRY):
+        fam = info_map[name].get("family") or "other"
+        grouped.setdefault(fam, []).append(name)
+    return [(f, grouped[f]) for f in [*family_order, "other"] if grouped.get(f)]
+
+
+def _build_overrides(
+    *, algorithms: list[str] | None,
+    anomaly_enabled: bool, anomaly_contamination: float | None,
+    anomaly_window: int | None,
+) -> dict[str, Any]:
+    out: dict[str, Any] = {}
+    if algorithms:
+        out["algorithms"] = list(algorithms)
+    af: dict[str, Any] = {"enabled": bool(anomaly_enabled)}
+    if anomaly_contamination is not None:
+        af["contamination"] = float(anomaly_contamination)
+    if anomaly_window is not None:
+        af["window"] = int(anomaly_window)
+    out["anomaly_filter"] = af
+    return out
+
+
+@router.get("/custom-run", response_class=HTMLResponse, name="ui_custom_run")
+def custom_run_page(
+    request: Request,
+    repo: RegistryRepo = Depends(repo_dep),
+    settings: Settings = Depends(settings_dep),
+) -> HTMLResponse:
+    saved = repo.list_custom_configs()
+    # Filter active runs that were probably triggered from this panel,
+    # but we don't actually mark them — surface all active so user has one
+    # cancel surface for everything they kicked off.
+    active = repo.list_active_runs()
+    try:
+        from ..scheduling.jobs import discover_targets
+        instances = discover_targets()
+    except Exception:  # noqa: BLE001
+        instances = sorted({r.instance for r in repo.list_runs(limit=200)})
+    return templates.TemplateResponse(
+        request, "custom_run.html",
+        {
+            "active": "custom_run",
+            "instances": instances,
+            "metrics": list(settings.metrics_to_forecast.queries.keys()),
+            "horizons": list(settings.horizons.keys()),
+            "grouped_algos": _algorithms_grouped(settings),
+            "algo_info": {name: algo_info(name) for name in REGISTRY},
+            "default_enabled": set(settings.algorithms.enabled),
+            "anomaly_default": settings.training.anomaly_filter.model_dump(),
+            "saved": [
+                {
+                    "id": c.id, "name": c.name, "instance": c.instance,
+                    "metric": c.metric, "horizon": c.horizon,
+                    "algorithms": c.algorithms or [],
+                    "anomaly_filter": c.anomaly_filter or {},
+                    "note": c.note or "",
+                    "run_count": c.run_count or 0,
+                    "last_used_at": c.last_used_at.isoformat() if c.last_used_at else None,
+                }
+                for c in saved
+            ],
+            "active_runs": [_run_dict(r) for r in active],
+            "training_paused": settings.training.paused,
+        },
+    )
+
+
+def _parse_custom_form(form: dict) -> dict[str, Any]:
+    """Shared form-extraction logic for save / run."""
+    name = (form.get("name") or "").strip()
+    instance = (form.get("instance") or "").strip()
+    metric = (form.get("metric") or "").strip()
+    horizon = (form.get("horizon") or "").strip()
+    if not instance or not metric or not horizon:
+        raise HTTPException(status_code=400, detail="instance, metric, and horizon are required")
+    algos_raw = form.getlist("algorithms") if hasattr(form, "getlist") else form.get("algorithms", [])
+    if isinstance(algos_raw, str):
+        algos = [algos_raw] if algos_raw else []
+    else:
+        algos = list(algos_raw)
+    algos = [a for a in algos if a in REGISTRY]
+    anomaly_enabled = (form.get("anomaly_enabled") or "") not in ("", "0", "false", "no")
+    anomaly_contamination = form.get("anomaly_contamination") or ""
+    anomaly_window = form.get("anomaly_window") or ""
+    try:
+        contamination = float(anomaly_contamination) if anomaly_contamination else None
+        window = int(anomaly_window) if anomaly_window else None
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=f"anomaly knobs: {exc}") from exc
+    note = (form.get("note") or "").strip() or None
+    return {
+        "name": name, "instance": instance, "metric": metric, "horizon": horizon,
+        "algorithms": algos,
+        "anomaly_enabled": anomaly_enabled,
+        "anomaly_contamination": contamination,
+        "anomaly_window": window,
+        "note": note,
+    }
+
+
+async def _form_dict(request: Request) -> Any:
+    """Returns a starlette FormData object (has .getlist)."""
+    return await request.form()
+
+
+@router.post("/custom-run/run", name="ui_custom_run_run")
+async def custom_run_run(
+    request: Request,
+    repo: RegistryRepo = Depends(repo_dep),
+) -> RedirectResponse:
+    form = await _form_dict(request)
+    p = _parse_custom_form(form)
+    overrides = _build_overrides(
+        algorithms=p["algorithms"] or None,
+        anomaly_enabled=p["anomaly_enabled"],
+        anomaly_contamination=p["anomaly_contamination"],
+        anomaly_window=p["anomaly_window"],
+    )
+    from ..training.tasks import train_task
+    train_task.apply_async(
+        args=[p["instance"], p["metric"], p["horizon"]],
+        kwargs={"overrides": overrides},
+    )
+    log.info("custom-run: triggered %s/%s/%s with overrides=%s",
+             p["instance"], p["metric"], p["horizon"], overrides)
+    return RedirectResponse(url=str(request.url_for("ui_custom_run")), status_code=303)
+
+
+@router.post("/custom-run/save", name="ui_custom_run_save")
+async def custom_run_save(
+    request: Request,
+    repo: RegistryRepo = Depends(repo_dep),
+) -> RedirectResponse:
+    form = await _form_dict(request)
+    p = _parse_custom_form(form)
+    if not p["name"]:
+        raise HTTPException(status_code=400, detail="name is required to save")
+    repo.upsert_custom_config(
+        name=p["name"], instance=p["instance"], metric=p["metric"], horizon=p["horizon"],
+        algorithms=p["algorithms"] or None,
+        anomaly_filter={
+            "enabled": p["anomaly_enabled"],
+            "contamination": p["anomaly_contamination"],
+            "window": p["anomaly_window"],
+        },
+        note=p["note"],
+    )
+    return RedirectResponse(url=str(request.url_for("ui_custom_run")), status_code=303)
+
+
+@router.post("/custom-run/save-and-run", name="ui_custom_run_save_and_run")
+async def custom_run_save_and_run(
+    request: Request,
+    repo: RegistryRepo = Depends(repo_dep),
+) -> RedirectResponse:
+    """Save then immediately fire."""
+    form = await _form_dict(request)
+    p = _parse_custom_form(form)
+    if not p["name"]:
+        raise HTTPException(status_code=400, detail="name is required to save")
+    cfg = repo.upsert_custom_config(
+        name=p["name"], instance=p["instance"], metric=p["metric"], horizon=p["horizon"],
+        algorithms=p["algorithms"] or None,
+        anomaly_filter={
+            "enabled": p["anomaly_enabled"],
+            "contamination": p["anomaly_contamination"],
+            "window": p["anomaly_window"],
+        },
+        note=p["note"],
+    )
+    overrides = _build_overrides(
+        algorithms=p["algorithms"] or None,
+        anomaly_enabled=p["anomaly_enabled"],
+        anomaly_contamination=p["anomaly_contamination"],
+        anomaly_window=p["anomaly_window"],
+    )
+    from ..training.tasks import train_task
+    train_task.apply_async(
+        args=[p["instance"], p["metric"], p["horizon"]],
+        kwargs={"overrides": overrides},
+    )
+    repo.touch_custom_config(cfg.id)
+    return RedirectResponse(url=str(request.url_for("ui_custom_run")), status_code=303)
+
+
+@router.post("/custom-run/run-saved/{config_id}", name="ui_custom_run_run_saved")
+def custom_run_run_saved(
+    request: Request, config_id: int,
+    repo: RegistryRepo = Depends(repo_dep),
+) -> RedirectResponse:
+    cfg = repo.get_custom_config(config_id)
+    if cfg is None:
+        raise HTTPException(status_code=404, detail=f"config {config_id} not found")
+    overrides: dict[str, Any] = {}
+    if cfg.algorithms:
+        overrides["algorithms"] = list(cfg.algorithms)
+    if cfg.anomaly_filter:
+        overrides["anomaly_filter"] = dict(cfg.anomaly_filter)
+    from ..training.tasks import train_task
+    train_task.apply_async(
+        args=[cfg.instance, cfg.metric, cfg.horizon],
+        kwargs={"overrides": overrides},
+    )
+    repo.touch_custom_config(cfg.id)
+    log.info("custom-run: fired saved config '%s' (%s/%s/%s)",
+             cfg.name, cfg.instance, cfg.metric, cfg.horizon)
+    return RedirectResponse(url=str(request.url_for("ui_custom_run")), status_code=303)
+
+
+@router.post("/custom-run/delete/{config_id}", name="ui_custom_run_delete")
+def custom_run_delete(
+    request: Request, config_id: int,
+    repo: RegistryRepo = Depends(repo_dep),
+) -> RedirectResponse:
+    repo.delete_custom_config(config_id)
+    return RedirectResponse(url=str(request.url_for("ui_custom_run")), status_code=303)
 
 
 # ============================================================

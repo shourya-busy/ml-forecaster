@@ -57,11 +57,23 @@ def _fetch_series(
     raise RuntimeError(f"no data returned for {instance=} {metric=}")
 
 
-def run_pipeline(*, instance: str, metric: str, horizon: str) -> int:
+def run_pipeline(
+    *, instance: str, metric: str, horizon: str,
+    celery_task_id: str | None = None,
+    overrides: dict[str, Any] | None = None,
+) -> int:
     """Run the full pipeline for one (instance, metric, horizon).
+
+    Args:
+        celery_task_id: stored on the run row so the UI can revoke later.
+        overrides: optional per-run overrides — supports
+            ``algorithms`` (list[str]) and
+            ``anomaly_filter`` (dict with keys enabled/contamination/window).
+            These bypass the global Settings only for this single run.
 
     Returns the TrainingRun id.
     """
+    from ..config.schema import AnomalyFilter
     settings = get_settings()
     if horizon not in settings.horizons:
         raise KeyError(f"horizon '{horizon}' not configured")
@@ -73,16 +85,29 @@ def run_pipeline(*, instance: str, metric: str, horizon: str) -> int:
     repo = RegistryRepo(settings.database_url)
     artifact_store = VolumeArtifactStore(settings.artifact_store.volume_path)
 
+    overrides = overrides or {}
+    algos_override: list[str] | None = overrides.get("algorithms") or None
+    af_override_dict = overrides.get("anomaly_filter")
+    af_override: AnomalyFilter | None = None
+    if af_override_dict is not None:
+        try:
+            af_override = AnomalyFilter.model_validate(af_override_dict)
+        except Exception as exc:  # noqa: BLE001
+            log.warning("invalid anomaly_filter override, ignoring: %s", exc)
+
     config_snapshot = {
         "horizon": h.model_dump(),
         "training": settings.training.model_dump(),
         "ranking": settings.ranking.model_dump(),
         "algorithms": settings.algorithms.model_dump(),
+        "overrides": overrides,
     }
     run_id = repo.create_run(
         instance=instance, metric=metric, horizon=horizon,
         config_snapshot=config_snapshot,
     )
+    if celery_task_id:
+        repo.record_celery_task_id(run_id, celery_task_id)
 
     t0 = time.perf_counter()
     error: str | None = None
@@ -102,9 +127,10 @@ def run_pipeline(*, instance: str, metric: str, horizon: str) -> int:
             raise RuntimeError(f"too few points after fetch+resample: {len(series)}")
 
         # Optional outlier scrubbing before training (Isolation Forest).
-        # Resamples after dropping so the post-clean series stays regular.
+        # Per-run override wins over global settings.
         from .preprocess import remove_anomalies
-        cleaned, n_dropped = remove_anomalies(series, settings.training.anomaly_filter)
+        active_af = af_override if af_override is not None else settings.training.anomaly_filter
+        cleaned, n_dropped = remove_anomalies(series, active_af)
         if n_dropped > 0:
             series = (
                 cleaned.asfreq(pd.Timedelta(h.step))
@@ -112,7 +138,12 @@ def run_pipeline(*, instance: str, metric: str, horizon: str) -> int:
             )
 
         horizon_steps = _horizon_steps(h.horizon, h.step)
-        shortlist = settings.algorithms.per_metric.get(metric) or settings.algorithms.enabled
+        # Per-run algo override beats the per-metric shortlist beats the global enabled list.
+        shortlist = (
+            algos_override
+            or settings.algorithms.per_metric.get(metric)
+            or settings.algorithms.enabled
+        )
         results = train_all_algos(
             series,
             algorithms=shortlist,
