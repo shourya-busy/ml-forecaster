@@ -2,7 +2,35 @@
 {% block title %}Models{% endblock %}
 {% block content %}
 <h1>Models</h1>
-<p class="subtitle">Per-algorithm aggregate stats across all completed runs.</p>
+<p class="subtitle">Per-algorithm aggregate stats. Filter by metric / horizon / time window to answer "which model is winning <em>now</em>?" instead of "ever".</p>
+
+<form class="filterbar" method="get">
+  <label>Metric
+    <select name="metric" onchange="this.form.submit()">
+      <option value="">all metrics</option>
+      {% for m in metrics %}
+      <option value="{{ m }}" {% if selected_metric == m %}selected{% endif %}>{{ m }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Horizon
+    <select name="horizon" onchange="this.form.submit()">
+      <option value="">all horizons</option>
+      {% for h in horizons %}
+      <option value="{{ h }}" {% if selected_horizon == h %}selected{% endif %}>{{ h }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Window
+    <select name="window" onchange="this.form.submit()">
+      <option value="all" {% if selected_window == 'all' %}selected{% endif %}>all history</option>
+      {% for w in window_presets %}
+      <option value="{{ w }}" {% if selected_window == w %}selected{% endif %}>last {{ w }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <a class="btn secondary" href="{{ url_for('ui_models') }}">Reset</a>
+</form>
 
 <div class="two-col">
   <div class="chart-card">

@@ -29,6 +29,35 @@ class Parallelism(BaseModel):
     fetch_jitter_seconds: int = 30
 
 
+class AnomalyFilter(BaseModel):
+    """Optional preprocessing step: drop outliers from the training series
+    before fitting models.
+
+    Use this when your metric has occasional deployment spikes, monitoring
+    blips, or other artifacts that would otherwise contaminate the fit.
+    The default is OFF — never silently mutate user data.
+    """
+
+    enabled: bool = False
+    method: Literal["isolation_forest"] = "isolation_forest"
+    contamination: float = Field(
+        0.02,
+        ge=0.001,
+        le=0.5,
+        description="Expected fraction of outliers. 0.02 = drop the most-anomalous 2%.",
+    )
+    window: int = Field(
+        1,
+        ge=1,
+        description=(
+            "Lag-window size used as the feature vector for the detector. "
+            "Default 1 (point-level outliers — usually the right choice for "
+            "monitoring metrics). Increase to 12-48 if your outliers are "
+            "*shapes* (brief load patterns) rather than single spikes."
+        ),
+    )
+
+
 class TrainingConfig(BaseModel):
     lookback_days: int = 30
     backtest_folds: int = 5
@@ -37,6 +66,7 @@ class TrainingConfig(BaseModel):
     parallelism: Parallelism = Field(default_factory=Parallelism)
     confidence_alpha: float = 0.05  # for 95% intervals
     max_artifact_versions_kept: int = 3
+    anomaly_filter: AnomalyFilter = Field(default_factory=AnomalyFilter)
 
 
 # ---------- algorithms ----------

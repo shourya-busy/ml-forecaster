@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 import logging
 import math
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -27,6 +27,7 @@ from ..api.deps import repo_dep, settings_dep
 from ..config.loader import get_settings
 from ..config.schema import Settings
 from ..models import REGISTRY
+from ..models.registry import ALGO_INFO, algo_info
 from ..registry.repo import RegistryRepo
 
 _HERE = Path(__file__).resolve().parent
@@ -259,6 +260,65 @@ def target_detail_page(
     )
     algos_history = sorted({r["winning_algo"] for r in winner_history})
 
+    # ----- live forecast vs actual -----
+    # Re-fetch the actual metric values for the time window the forecast
+    # covers, so the user can eyeball how well the model is tracking the
+    # real series. Fails open: if the data source can't be reached, we
+    # just skip the overlay rather than 500-ing the page.
+    actuals_data: list[dict[str, Any]] = []
+    live_mae: float | None = None
+    live_count = 0
+    if forecasts_data and horizon in settings.horizons:
+        try:
+            import pandas as _pd
+            from ..data.factory import make_data_source
+
+            query = settings.metrics_to_forecast.queries.get(metric)
+            if query:
+                earliest = _pd.Timestamp(forecasts_data[0]["ts"])
+                latest = _pd.Timestamp(forecasts_data[-1]["ts"])
+                now = _pd.Timestamp.now(tz="UTC")
+                end = min(latest, now)
+                if end > earliest:
+                    step = settings.horizons[horizon].step
+                    ds = make_data_source(settings.data_sources)
+                    try:
+                        series_list = ds.fetch_range(
+                            query,
+                            earliest.to_pydatetime(),
+                            end.to_pydatetime(),
+                            step,
+                            instance_label=settings.targets.instance_label,
+                            metric_name=metric,
+                        )
+                    finally:
+                        ds.close()
+                    for s in series_list:
+                        if s.instance != instance or s.df.empty:
+                            continue
+                        # Match the forecast step alignment for cleaner overlay
+                        snapped = s.df["value"].asfreq(_pd.Timedelta(step)).interpolate("time")
+                        actuals_data = [
+                            {"ts": idx.isoformat(), "value": _safe(float(v))}
+                            for idx, v in snapped.dropna().items()
+                        ]
+                        break
+                    # Compute MAE over the overlapping window
+                    if actuals_data:
+                        fc_map = {p["ts"]: p["point"] for p in forecasts_data}
+                        ac_map = {p["ts"]: p["value"] for p in actuals_data}
+                        common = set(fc_map.keys()) & set(ac_map.keys())
+                        diffs = [
+                            abs(fc_map[t] - ac_map[t])
+                            for t in common
+                            if fc_map[t] is not None and ac_map[t] is not None
+                        ]
+                        if diffs:
+                            live_mae = sum(diffs) / len(diffs)
+                            live_count = len(diffs)
+        except Exception as exc:  # noqa: BLE001
+            log.warning("could not fetch actuals for overlay: %s", exc)
+
     return templates.TemplateResponse(
         request, "target_detail.html",
         {
@@ -267,6 +327,9 @@ def target_detail_page(
             "summary": summary,
             "forecasts": forecasts_data,
             "forecasts_json": json.dumps(forecasts_data),
+            "actuals_json": json.dumps(actuals_data),
+            "live_mae": live_mae,
+            "live_count": live_count,
             "ranking": ranking_list,
             "ranking_json": json.dumps(ranking_list),
             "score_metrics": SCORE_METRICS,
@@ -419,6 +482,7 @@ def run_detail_page(
         {"algo": r["algo"], "duration": _safe(r["duration"])}
         for r in rows if r["duration"] is not None
     ]
+    per_fold = repo.run_per_fold_scores(run_id)
     return templates.TemplateResponse(
         request, "run_detail.html",
         {
@@ -426,6 +490,8 @@ def run_detail_page(
             "run": run, "rows": rows, "score_metrics": SCORE_METRICS,
             "rank_chart_json": json.dumps(rank_chart),
             "dur_chart_json": json.dumps(dur_chart),
+            "per_fold": per_fold,
+            "per_fold_json": json.dumps(per_fold),
             "config_snapshot_json": json.dumps(run["config_snapshot"], indent=2, default=str),
         },
     )
@@ -438,10 +504,14 @@ def run_detail_page(
 @router.get("/models", response_class=HTMLResponse, name="ui_models")
 def models_page(
     request: Request,
+    metric: str | None = None,
+    horizon: str | None = None,
+    window: str = "all",
     repo: RegistryRepo = Depends(repo_dep),
     settings: Settings = Depends(settings_dep),
 ) -> HTMLResponse:
-    stats = repo.model_stats()
+    since = _since_for_window(window) if window != "all" else None
+    stats = repo.model_stats(metric=metric, horizon=horizon, since=since)
     enabled = set(settings.algorithms.enabled)
     per_metric_eligibility: dict[str, list[str]] = {}
     for algo in REGISTRY:
@@ -451,7 +521,6 @@ def models_page(
         ]
         per_metric_eligibility[algo] = eligible
 
-    # Ensure every registered algo appears, even if zero runs
     by_algo = {row["algo"]: row for row in stats}
     rows: list[dict[str, Any]] = []
     for algo in sorted(REGISTRY.keys()):
@@ -470,12 +539,19 @@ def models_page(
         {
             "active": "models",
             "models": rows,
+            "metrics": list(settings.metrics_to_forecast.queries.keys()),
+            "horizons": list(settings.horizons.keys()),
+            "window_presets": list(_WINDOW_PRESETS.keys()),
+            "selected_metric": metric, "selected_horizon": horizon,
+            "selected_window": window,
             "rows_json": json.dumps([
                 {"algo": r["algo"], "wins": r["wins"], "runs": r["runs"],
                  "win_rate": r["win_rate"]}
                 for r in rows
             ]),
-            "per_metric_wins_json": json.dumps(repo.wins_by_metric()),
+            "per_metric_wins_json": json.dumps(
+                repo.wins_by_metric(metric=metric, horizon=horizon, since=since),
+            ),
         },
     )
 
@@ -538,8 +614,19 @@ def schedule_page(
             log_err = str(e)
         else:
             log_err = ""
+        try:
+            import pandas as _pd
+            # Pandas 4.x prefers capital 'D'; normalise quietly.
+            n_points = int(
+                _pd.Timedelta(spec.horizon.replace("d", "D"))
+                / _pd.Timedelta(spec.step.replace("d", "D"))
+            )
+        except Exception:  # noqa: BLE001
+            n_points = 0
         horizons_data.append({
             "name": name, "step": spec.step, "horizon": spec.horizon,
+            "lookback_days": spec.lookback_days or settings.training.lookback_days,
+            "points_predicted": n_points,
             "retrain": spec.retrain, "next_fires": fires, "error": log_err,
         })
         for ts in fires:
@@ -582,13 +669,45 @@ def schedule_save_horizon(
     request: Request,
     horizon: str = Form(...),
     retrain: str = Form(...),
+    step: str = Form(""),
+    forecast_horizon: str = Form(""),
+    lookback_days: str = Form(""),
     repo: RegistryRepo = Depends(repo_dep),
 ) -> RedirectResponse:
+    """Save changes to one horizon block.
+
+    Edits to `step` or `forecast_horizon` invalidate previously trained
+    models (they were fit at the old step). The UI warns about this; the
+    *next* training run will re-fit on the new step + horizon.
+    """
     from croniter import croniter
-    # Validate cron expression before persisting.
+    import pandas as _pd
+
     if not croniter.is_valid(retrain):
         raise HTTPException(status_code=400, detail=f"invalid cron: {retrain!r}")
     repo.set_settings_override(f"horizons.{horizon}.retrain", retrain)
+
+    def _validate_duration(s: str, name: str) -> str:
+        try:
+            td = _pd.Timedelta(s)
+        except Exception as exc:  # noqa: BLE001
+            raise HTTPException(status_code=400, detail=f"{name}: not a valid pandas Timedelta: {s!r}") from exc
+        if td.total_seconds() <= 0:
+            raise HTTPException(status_code=400, detail=f"{name}: must be positive")
+        return s
+
+    if step.strip():
+        repo.set_settings_override(f"horizons.{horizon}.step", _validate_duration(step.strip(), "step"))
+    if forecast_horizon.strip():
+        repo.set_settings_override(f"horizons.{horizon}.horizon", _validate_duration(forecast_horizon.strip(), "horizon"))
+    if lookback_days.strip():
+        try:
+            v = int(lookback_days)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=f"lookback_days: {exc}") from exc
+        if v < 1:
+            raise HTTPException(status_code=400, detail="lookback_days must be ≥ 1")
+        repo.set_settings_override(f"horizons.{horizon}.lookback_days", v)
     _invalidate()
     return RedirectResponse(url=str(request.url_for("ui_schedule")), status_code=303)
 
@@ -777,6 +896,19 @@ def manage_training_page(
     request: Request,
     settings: Settings = Depends(settings_dep),
 ) -> HTMLResponse:
+    # Group by family so the library renders as sectioned cards; selection
+    # is still a flat checkbox group, so cross-category mixing works.
+    info_map = {name: algo_info(name) for name in REGISTRY}
+    family_order = ["baseline", "statistical", "ml", "deep-learning"]
+    grouped: dict[str, list[str]] = {f: [] for f in family_order}
+    for name in sorted(REGISTRY):
+        fam = info_map[name].get("family") or "other"
+        grouped.setdefault(fam, []).append(name)
+    grouped_sections = [
+        (fam, grouped[fam])
+        for fam in [*family_order, "other"]
+        if grouped.get(fam)
+    ]
     return templates.TemplateResponse(
         request, "manage_training.html",
         {
@@ -786,6 +918,10 @@ def manage_training_page(
             "ranking": settings.ranking,
             "algorithms": settings.algorithms,
             "all_algos": sorted(REGISTRY.keys()),
+            "algo_info": info_map,
+            "grouped_sections": grouped_sections,
+            "total_registered": len(REGISTRY),
+            "total_enabled": len(set(settings.algorithms.enabled) & set(REGISTRY)),
         },
     )
 
@@ -815,6 +951,9 @@ def manage_training_save(
     weight_smape: str = Form(""),
     weight_r2: str = Form(""),
     enabled_algos: list[str] = Form(default=[]),
+    anomaly_filter_enabled: str | None = Form(None),
+    anomaly_contamination: str = Form(""),
+    anomaly_window: str = Form(""),
     repo: RegistryRepo = Depends(repo_dep),
 ) -> RedirectResponse:
     _set_or_delete(repo, "training.lookback_days", lookback_days, int)
@@ -842,6 +981,16 @@ def manage_training_save(
         if unknown:
             raise HTTPException(status_code=400, detail=f"unknown algos: {unknown}")
         repo.set_settings_override("algorithms.enabled", list(enabled_algos))
+
+    # Anomaly-filter preprocessing toggle
+    repo.set_settings_override(
+        "training.anomaly_filter.enabled", anomaly_filter_enabled is not None
+    )
+    _set_or_delete(repo, "training.anomaly_filter.contamination",
+                   anomaly_contamination, float)
+    _set_or_delete(repo, "training.anomaly_filter.window",
+                   anomaly_window, int)
+
     _invalidate()
     return RedirectResponse(url=str(request.url_for("ui_manage_training")), status_code=303)
 
@@ -855,19 +1004,31 @@ def compare_page(
     request: Request,
     a: str | None = None,   # instance::metric::horizon
     b: str | None = None,
+    horizon: str | None = None,    # narrow the A/B picker
+    metric: str | None = None,     # narrow the A/B picker
+    limit: int = 50,
     repo: RegistryRepo = Depends(repo_dep),
     settings: Settings = Depends(settings_dep),
 ) -> HTMLResponse:
-    # Build picker options from latest rankings
+    horizons = list(settings.horizons.keys())
+    metrics = list(settings.metrics_to_forecast.queries.keys())
+
     summary = repo.winners_summary(
         recent_window=settings.exposition.diagnostics.recent_window_runs,
     )
+    # Filter the picker options by horizon and metric if provided, so the
+    # dropdowns don't become a giant unscannable list at scale.
+    filtered = [
+        s for s in summary
+        if (not horizon or s["horizon"] == horizon)
+        and (not metric or s["metric"] == metric)
+    ]
     options = [
         {
             "key": f"{s['instance']}::{s['metric']}::{s['horizon']}",
             "label": f"{s['instance']} · {s['metric']} · {s['horizon']}",
         }
-        for s in summary
+        for s in filtered
     ]
 
     def _data_for(key: str | None) -> dict[str, Any] | None:
@@ -881,7 +1042,8 @@ def compare_page(
             instance=inst, metric=met, horizon=hor, only_best=True,
         )
         score_history = repo.score_history(
-            instance=inst, metric=met, horizon=hor, score="mae", limit=50,
+            instance=inst, metric=met, horizon=hor, score="mae",
+            limit=max(1, min(500, int(limit))),
         )
         rankings = repo.latest_rankings(instance=inst, metric=met, horizon=hor)
         winner = rankings[0].winning_algo if rankings else None
@@ -902,6 +1064,10 @@ def compare_page(
         {
             "active": "compare",
             "options": options,
+            "all_options_count": len(summary),
+            "horizons": horizons, "metrics": metrics,
+            "selected_horizon": horizon, "selected_metric": metric,
+            "limit": limit,
             "a": _data_for(a), "b": _data_for(b),
             "a_key": a, "b_key": b,
             "display_timezone": settings.display_timezone,
@@ -915,73 +1081,155 @@ def compare_page(
 # Trends — aggregate forecast + accuracy drift
 # ============================================================
 
+_WINDOW_PRESETS = {
+    "1d": 24, "3d": 72, "7d": 168, "14d": 336, "30d": 720, "90d": 2160,
+}
+
+
+def _since_for_window(window: str | None) -> datetime | None:
+    """Convert '7d', '1d', '30d' presets or a custom ISO into a UTC datetime."""
+    if not window or window == "all":
+        return None
+    if window in _WINDOW_PRESETS:
+        return datetime.now(timezone.utc) - timedelta(hours=_WINDOW_PRESETS[window])
+    # Try parsing as ISO (datetime-local in IST)
+    try:
+        dt = datetime.fromisoformat(window)
+    except ValueError:
+        return None
+    if dt.tzinfo is None:
+        tz = _resolve_tz(get_settings().display_timezone)
+        dt = dt.replace(tzinfo=tz)
+    return dt.astimezone(timezone.utc)
+
+
+def _aggregate(values: list[float], agg: str) -> float:
+    if not values:
+        return 0.0
+    if agg == "median":
+        sv = sorted(values)
+        n = len(sv)
+        return sv[n // 2] if n % 2 else (sv[n // 2 - 1] + sv[n // 2]) / 2
+    if agg == "p95":
+        sv = sorted(values)
+        idx = max(0, min(len(sv) - 1, int(0.95 * (len(sv) - 1))))
+        return sv[idx]
+    # default: mean
+    return sum(values) / len(values)
+
+
 @router.get("/trends", response_class=HTMLResponse, name="ui_trends")
 def trends_page(
     request: Request,
     metric: str | None = None,
+    horizon: str | None = None,
+    window: str = "7d",
+    agg: str = "median",
+    fresh_hours: int | None = None,
     repo: RegistryRepo = Depends(repo_dep),
     settings: Settings = Depends(settings_dep),
 ) -> HTMLResponse:
     metrics = list(settings.metrics_to_forecast.queries.keys())
+    horizons = list(settings.horizons.keys())
     selected_metric = metric or (metrics[0] if metrics else "cpu")
-
-    # 1) Average forecast across all instances for the selected metric/horizon=medium
-    medium = "medium" if "medium" in settings.horizons else next(iter(settings.horizons))
-    forecasts = repo.latest_forecasts(
-        metric=selected_metric, horizon=medium, only_best=True,
+    selected_horizon = horizon if horizon in horizons else (
+        "medium" if "medium" in horizons else (horizons[0] if horizons else "medium")
     )
-    # Bucket by timestamp; compute the mean point across instances.
+    selected_window = window if (window in _WINDOW_PRESETS or window == "all") else "7d"
+    selected_agg = agg if agg in {"mean", "median", "p95"} else "median"
+
+    # If user explicitly set fresh_hours, use it. Otherwise default to
+    # something sane per horizon: short -> 2h, medium -> 12h, long -> 72h.
+    if fresh_hours is None:
+        defaults = {"short": 2, "medium": 12, "long": 72}
+        fresh_hours_eff = defaults.get(selected_horizon, 24)
+    else:
+        fresh_hours_eff = max(0, int(fresh_hours))
+    fresh_since = (
+        datetime.now(timezone.utc) - timedelta(hours=fresh_hours_eff)
+        if fresh_hours_eff > 0 else None
+    )
+    window_since = _since_for_window(selected_window)
+
+    # 1) Aggregate forecast curve across instances at each future timestamp,
+    # restricted to instances whose latest run is "fresh" enough.
+    forecasts = repo.latest_forecasts(
+        metric=selected_metric, horizon=selected_horizon, only_best=True,
+        fresh_since=fresh_since,
+    )
     by_ts: dict[str, list[float]] = {}
     for f in forecasts:
         if f.point is None:
             continue
         by_ts.setdefault(f.ts.isoformat(), []).append(float(f.point))
-    avg_curve = [
-        {"ts": ts, "avg": sum(vs)/len(vs), "n": len(vs)}
+    forecast_curve = [
+        {"ts": ts, "value": _aggregate(vs, selected_agg), "n": len(vs)}
         for ts, vs in sorted(by_ts.items())
     ]
+    unique_instances = len({f.instance for f in forecasts})
 
-    # 2) Accuracy drift: for each completed run on the selected metric,
-    # use the winning algo's MAE from that run. Mean per day = drift.
+    # 2) Accuracy drift: for each completed run within the window on the
+    # selected (metric, horizon), use the winning algo's MAE.
+    from sqlalchemy import text as _text
     with repo.session() as s:
-        rows = list(s.execute(
-            __import__("sqlalchemy").text("""
-                SELECT tr.completed_at, r.winning_algo, m.value AS mae
-                FROM training_runs tr
-                JOIN rankings r ON r.run_id = tr.id
-                JOIN run_metrics m ON m.run_id = tr.id AND m.algo = r.winning_algo
-                                  AND m.score_metric = 'mae' AND m.fold = -1
-                WHERE tr.status = 'completed' AND tr.metric = :metric
-                ORDER BY tr.completed_at ASC
-            """),
-            {"metric": selected_metric},
-        ))
+        sql = """
+            SELECT tr.completed_at, r.winning_algo, m.value AS mae
+            FROM training_runs tr
+            JOIN rankings r ON r.run_id = tr.id
+            JOIN run_metrics m ON m.run_id = tr.id AND m.algo = r.winning_algo
+                              AND m.score_metric = 'mae' AND m.fold = -1
+            WHERE tr.status = 'completed'
+              AND tr.metric = :metric
+              AND tr.horizon = :horizon
+        """
+        params: dict[str, Any] = {"metric": selected_metric, "horizon": selected_horizon}
+        if window_since is not None:
+            sql += " AND tr.completed_at >= :since"
+            params["since"] = window_since
+        sql += " ORDER BY tr.completed_at ASC"
+        rows = list(s.execute(_text(sql), params))
+    def _iso(v):
+        # text() queries on SQLite return strings; psycopg returns datetimes
+        if v is None:
+            return None
+        if isinstance(v, str):
+            return v
+        return v.isoformat()
+
     drift_curve = [
-        {"completed_at": r.completed_at.isoformat() if r.completed_at else None,
-         "winner": r.winning_algo, "mae": float(r.mae) if r.mae is not None else None}
+        {
+            "completed_at": _iso(r.completed_at),
+            "winner": r.winning_algo,
+            "mae": float(r.mae) if r.mae is not None else None,
+        }
         for r in rows
     ]
 
-    # 3) Winner share — counts per algo on this metric across all rankings
-    with repo.session() as s:
-        from .. import registry as _registry  # noqa: F401
-        from sqlalchemy import func, select as _select
-        from forecaster.registry.models import Ranking
-        winner_rows = list(s.execute(
-            _select(Ranking.winning_algo, func.count(Ranking.id))
-            .where(Ranking.metric == selected_metric)
-            .group_by(Ranking.winning_algo)
-        ))
-    winner_share = [{"algo": r[0], "wins": int(r[1])} for r in winner_rows]
+    # 3) Winner share — within the time window, for the selected metric+horizon
+    wins_map = repo.wins_by_metric(
+        metric=selected_metric, horizon=selected_horizon, since=window_since,
+    )
+    winner_share = [
+        {"algo": algo, "wins": cnt}
+        for algo, cnt in wins_map.get(selected_metric, {}).items()
+    ]
+    winner_share.sort(key=lambda r: -r["wins"])
 
     return templates.TemplateResponse(
         request, "trends.html",
         {
             "active": "trends",
             "metrics": metrics,
+            "horizons": horizons,
             "selected_metric": selected_metric,
-            "horizon": medium,
-            "avg_curve_json": json.dumps(avg_curve),
+            "selected_horizon": selected_horizon,
+            "selected_window": selected_window,
+            "selected_agg": selected_agg,
+            "window_presets": list(_WINDOW_PRESETS.keys()),
+            "fresh_hours": fresh_hours_eff,
+            "instance_count": unique_instances,
+            "drift_sample_size": len(drift_curve),
+            "forecast_curve_json": json.dumps(forecast_curve),
             "drift_curve_json": json.dumps(drift_curve),
             "winner_share_json": json.dumps(winner_share),
             "display_timezone": settings.display_timezone,

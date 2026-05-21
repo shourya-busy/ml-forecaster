@@ -6,17 +6,25 @@
 
 <h2>Per-horizon retrain cadences</h2>
 {% for h in horizons %}
-<div class="card" style="margin-bottom: 12px">
-  <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px">
-    <div>
-      <strong style="font-size: 15px">{{ h.name }}</strong>
-      <span class="sub">step {{ h.step }} · forecast horizon {{ h.horizon }}</span>
-    </div>
-    <form method="post" action="{{ url_for('ui_schedule_save_horizon') }}" style="display: flex; gap: 8px; align-items: center">
-      <input type="hidden" name="horizon" value="{{ h.name }}">
-      <input type="text" name="retrain" value="{{ h.retrain }}" pattern="[\*\d\,\-\/\s]+" required style="width: 200px; background: var(--panel-2); color: var(--text); border: 1px solid var(--border); padding: 6px 10px; border-radius: 6px; font-family: ui-monospace, monospace">
-      <button class="btn" type="submit">Save</button>
-    </form>
+<form class="card" method="post" action="{{ url_for('ui_schedule_save_horizon') }}" style="margin-bottom: 12px">
+  <input type="hidden" name="horizon" value="{{ h.name }}">
+  <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 10px; flex-wrap: wrap">
+    <strong style="font-size: 16px">{{ h.name }}</strong>
+    <span class="sub">step <code>{{ h.step }}</code> · forecast <code>{{ h.horizon }}</code> · lookback <code>{{ h.lookback_days }}d</code> · {{ h.points_predicted }} points predicted</span>
+  </div>
+  <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(160px, 1fr))">
+    <label>Retrain cron <span class="sub">({{ display_tz }})</span>
+      <input type="text" name="retrain" value="{{ h.retrain }}" required style="width: 100%; background: var(--panel-2); color: var(--text); border: 1px solid var(--border); padding: 6px 10px; border-radius: 6px; font-family: ui-monospace, monospace; font-size: 12px"></label>
+    <label>Step <span class="sub">(1min · 5min · 1h)</span>
+      <input type="text" name="step" placeholder="{{ h.step }}" style="width: 100%; background: var(--panel-2); color: var(--text); border: 1px solid var(--border); padding: 6px 10px; border-radius: 6px; font-family: ui-monospace, monospace; font-size: 12px"></label>
+    <label>Forecast horizon <span class="sub">(1h · 24h · 7d)</span>
+      <input type="text" name="forecast_horizon" placeholder="{{ h.horizon }}" style="width: 100%; background: var(--panel-2); color: var(--text); border: 1px solid var(--border); padding: 6px 10px; border-radius: 6px; font-family: ui-monospace, monospace; font-size: 12px"></label>
+    <label>Lookback (days)
+      <input type="number" min="1" max="365" name="lookback_days" placeholder="{{ h.lookback_days }}" style="width: 100%; background: var(--panel-2); color: var(--text); border: 1px solid var(--border); padding: 6px 10px; border-radius: 6px; font-family: ui-monospace, monospace; font-size: 12px"></label>
+  </div>
+  <div style="margin-top: 10px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap">
+    <button class="btn" type="submit">Save changes</button>
+    <span class="sub">Leave any field blank to keep its current value. Changing <code>step</code> or <code>forecast horizon</code> means the next training run refits models from scratch (old artifacts were fit at the old step).</span>
   </div>
   {% if h.next_fires %}
   <div class="sub" style="margin-top: 8px">
@@ -25,7 +33,7 @@
   {% elif h.error %}
   <div class="sub" style="margin-top: 8px; color: var(--bad)">cron parse error: {{ h.error }}</div>
   {% endif %}
-</div>
+</form>
 {% endfor %}
 
 <h2>Upcoming runs (next 30)</h2>

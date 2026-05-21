@@ -40,6 +40,12 @@ dependencies = [
     "xgboost>=2.0",
     "lightgbm>=4.3",
     "torch>=2.2",
+    # Nixtla — fast numba-compiled AutoARIMA / AutoETS / AutoTheta / MSTL.
+    # ~30 MB; orders of magnitude faster than the statsmodels equivalents.
+    "statsforecast>=1.7",
+    # NeuralProphet — torch-based successor to Prophet with AR-Net.
+    # Skipped on 3.13+ until upstream catches up.
+    "neuralprophet>=0.8 ; python_version < '3.13'",
 
     # Prom exposition
     "prometheus-client>=0.20",

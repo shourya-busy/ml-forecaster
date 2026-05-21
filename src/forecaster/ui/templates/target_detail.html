@@ -15,6 +15,21 @@
   &nbsp;|&nbsp; <a href="{{ url_for('ui_targets') }}">← all targets</a>
 </p>
 
+{% if live_mae is not none %}
+<div class="card" style="margin-bottom: 14px">
+  <div class="label">Live forecast accuracy vs Prometheus actuals</div>
+  <div class="value" style="font-size: 22px">
+    MAE = {{ "%.3f"|format(live_mae) }}
+    <span class="sub" style="font-weight: normal">across {{ live_count }} overlapping point(s)</span>
+  </div>
+  <div class="sub">
+    Computed by re-querying the same PromQL used at training time for the
+    period this forecast already covers. Lower is better; compare against
+    the backtest MAE in the ranking table below.
+  </div>
+</div>
+{% endif %}
+
 <form method="post" action="{{ url_for('ui_trigger_run') }}" style="margin-bottom:18px">
   <input type="hidden" name="instance" value="{{ instance }}">
   <input type="hidden" name="metric" value="{{ metric }}">
@@ -79,6 +94,7 @@
 
 <script>
 const FORECAST_DATA   = {{ forecasts_json|safe }};
+const ACTUALS_DATA    = {{ actuals_json|safe }};
 const RANKING_DATA    = {{ ranking_json|safe }};
 const WINNER_HISTORY  = {{ winner_history_json|safe }};
 const SCORE_HISTORY   = {{ score_history_json|safe }};
@@ -106,21 +122,30 @@ document.addEventListener("DOMContentLoaded", () => {
 function drawForecast() {
   const ctx = document.getElementById("forecastChart");
   if (!ctx || !FORECAST_DATA.length) return;
-  const labels = FORECAST_DATA.map(p => fmtTs(p.ts));
+  // Union of forecast and actual timestamps so both align cleanly on the X axis
+  const allTs = [...new Set([
+    ...FORECAST_DATA.map(p => p.ts),
+    ...ACTUALS_DATA.map(p => p.ts),
+  ])].sort();
+  const fcMap = new Map(FORECAST_DATA.map(p => [p.ts, p]));
+  const acMap = new Map(ACTUALS_DATA.map(p => [p.ts, p]));
   new Chart(ctx, {
     type: "line",
     data: {
-      labels,
+      labels: allTs.map(fmtTs),
       datasets: [
-        { label: "lower",  data: FORECAST_DATA.map(p => p.lower),
+        { label: "lower",  data: allTs.map(t => { const p = fcMap.get(t); return p ? p.lower : null; }),
           borderColor: "rgba(56,189,248,.0)", backgroundColor: "rgba(56,189,248,.18)",
-          fill: "+1", pointRadius: 0, tension: .2 },
-        { label: "upper",  data: FORECAST_DATA.map(p => p.upper),
+          fill: "+1", pointRadius: 0, tension: .2, spanGaps: true },
+        { label: "upper",  data: allTs.map(t => { const p = fcMap.get(t); return p ? p.upper : null; }),
           borderColor: "rgba(56,189,248,.0)", backgroundColor: "rgba(56,189,248,.18)",
-          fill: false, pointRadius: 0, tension: .2 },
-        { label: "forecast", data: FORECAST_DATA.map(p => p.point),
+          fill: false, pointRadius: 0, tension: .2, spanGaps: true },
+        { label: "forecast", data: allTs.map(t => { const p = fcMap.get(t); return p ? p.point : null; }),
           borderColor: "#38bdf8", backgroundColor: "transparent",
-          borderWidth: 2, fill: false, pointRadius: 0, tension: .2 },
+          borderWidth: 2, fill: false, pointRadius: 0, tension: .2, spanGaps: true },
+        { label: "actual (Prometheus)", data: allTs.map(t => { const p = acMap.get(t); return p ? p.value : null; }),
+          borderColor: "#22c55e", backgroundColor: "transparent",
+          borderWidth: 2, borderDash: [4, 4], fill: false, pointRadius: 0, tension: .2, spanGaps: true },
       ],
     },
     options: fc.commonChartOptions(),

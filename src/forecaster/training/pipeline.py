@@ -101,6 +101,16 @@ def run_pipeline(*, instance: str, metric: str, horizon: str) -> int:
         if len(series) < 50:
             raise RuntimeError(f"too few points after fetch+resample: {len(series)}")
 
+        # Optional outlier scrubbing before training (Isolation Forest).
+        # Resamples after dropping so the post-clean series stays regular.
+        from .preprocess import remove_anomalies
+        cleaned, n_dropped = remove_anomalies(series, settings.training.anomaly_filter)
+        if n_dropped > 0:
+            series = (
+                cleaned.asfreq(pd.Timedelta(h.step))
+                .interpolate("time").dropna()
+            )
+
         horizon_steps = _horizon_steps(h.horizon, h.step)
         shortlist = settings.algorithms.per_metric.get(metric) or settings.algorithms.enabled
         results = train_all_algos(

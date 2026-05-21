@@ -140,18 +140,28 @@ class RegistryRepo:
         horizon: str | None = None,
         only_best: bool = True,
         algo: str | None = None,
+        fresh_since: datetime | None = None,
     ) -> list[Forecast]:
         """Return forecasts whose run is the latest completed for each
         (instance, metric, horizon). Used by API + Prom exposition.
+
+        If `fresh_since` is given, only returns forecasts whose underlying
+        TrainingRun.completed_at is >= fresh_since — i.e. drops stale
+        forecasts whose run hasn't refreshed lately.
         """
         with self.session() as s:
             # Latest completed run id per target.
-            subq = (
+            base_q = (
                 select(
                     TrainingRun.instance, TrainingRun.metric, TrainingRun.horizon,
                     TrainingRun.id.label("run_id"),
                 )
                 .where(TrainingRun.status == "completed")
+            )
+            if fresh_since is not None:
+                base_q = base_q.where(TrainingRun.completed_at >= fresh_since)
+            subq = (
+                base_q
                 .order_by(
                     TrainingRun.instance, TrainingRun.metric, TrainingRun.horizon,
                     TrainingRun.completed_at.desc(),
@@ -417,17 +427,43 @@ class RegistryRepo:
             "duration_sample_size": len(recent),
         }
 
-    def model_stats(self) -> list[dict[str, Any]]:
-        """Per-algorithm aggregate: total wins, runs entered, avg MAE/RMSE, avg train time."""
+    def model_stats(
+        self,
+        *,
+        metric: str | None = None,
+        horizon: str | None = None,
+        since: datetime | None = None,
+        until: datetime | None = None,
+    ) -> list[dict[str, Any]]:
+        """Per-algorithm aggregate within an optional (metric, horizon, time) filter."""
         with self.session() as s:
-            # All averaged-fold metric rows
+            # Constrain the source runs first; downstream tables filter
+            # through `run_id IN (subq)`.
+            run_q = select(TrainingRun.id).where(TrainingRun.status == "completed")
+            if metric:
+                run_q = run_q.where(TrainingRun.metric == metric)
+            if horizon:
+                run_q = run_q.where(TrainingRun.horizon == horizon)
+            if since is not None:
+                run_q = run_q.where(TrainingRun.completed_at >= since)
+            if until is not None:
+                run_q = run_q.where(TrainingRun.completed_at <= until)
+            run_ids = list(s.scalars(run_q))
+
+            if not run_ids:
+                return []
+
             metric_rows = list(s.scalars(
-                select(RunMetric).where(RunMetric.fold == -1)
+                select(RunMetric)
+                .where(RunMetric.fold == -1)
+                .where(RunMetric.run_id.in_(run_ids))
             ))
-            # Artifact rows give us train durations
-            art_rows = list(s.scalars(select(ModelArtifact)))
-            # Winning algo per (completed) ranking row
-            ranking_rows = list(s.scalars(select(Ranking)))
+            art_rows = list(s.scalars(
+                select(ModelArtifact).where(ModelArtifact.run_id.in_(run_ids))
+            ))
+            ranking_rows = list(s.scalars(
+                select(Ranking).where(Ranking.run_id.in_(run_ids))
+            ))
 
         runs_per_algo: dict[str, set[int]] = {}
         score_sum: dict[str, dict[str, float]] = {}
@@ -469,15 +505,53 @@ class RegistryRepo:
             })
         return out
 
-    def wins_by_metric(self) -> dict[str, dict[str, int]]:
-        """Returns {metric: {algo: win_count, ...}, ...} for stacked bar chart."""
+    def wins_by_metric(
+        self,
+        *,
+        metric: str | None = None,
+        horizon: str | None = None,
+        since: datetime | None = None,
+        until: datetime | None = None,
+    ) -> dict[str, dict[str, int]]:
+        """Returns {metric: {algo: win_count}}. All filters optional."""
         with self.session() as s:
-            rows = list(s.scalars(select(Ranking)))
+            q = select(Ranking).join(TrainingRun, TrainingRun.id == Ranking.run_id)
+            if metric:
+                q = q.where(Ranking.metric == metric)
+            if horizon:
+                q = q.where(Ranking.horizon == horizon)
+            if since:
+                q = q.where(TrainingRun.completed_at >= since)
+            if until:
+                q = q.where(TrainingRun.completed_at <= until)
+            rows = list(s.scalars(q))
         out: dict[str, dict[str, int]] = {}
         for r in rows:
             bucket = out.setdefault(r.metric, {})
             bucket[r.winning_algo] = bucket.get(r.winning_algo, 0) + 1
         return out
+
+    def run_per_fold_scores(self, run_id: int) -> dict[str, list[dict[str, Any]]]:
+        """Per-fold backtest scores for every algo in this run.
+
+        Output: {algo: [{fold, mae, rmse, mape, smape, r2}, ...]}.
+        Folds are zero-indexed (oldest expanding-window fold = 0).
+        """
+        with self.session() as s:
+            rows = list(s.scalars(
+                select(RunMetric)
+                .where(RunMetric.run_id == run_id)
+                .where(RunMetric.fold >= 0)
+            ))
+        nested: dict[str, dict[int, dict[str, Any]]] = {}
+        for m in rows:
+            folds = nested.setdefault(m.algo, {})
+            cell = folds.setdefault(m.fold, {"fold": m.fold})
+            cell[m.score_metric] = m.value
+        return {
+            algo: [folds[i] for i in sorted(folds)]
+            for algo, folds in nested.items()
+        }
 
     def run_full_detail(self, run_id: int) -> dict[str, Any] | None:
         """All data needed to render the Run Detail page."""

@@ -60,12 +60,54 @@
 <p class="sub">No scored algos yet.</p>
 {% endif %}
 
+<h2>Backtest folds (how train/test was split)</h2>
+<p class="subtitle">
+  Each algorithm above was evaluated with <strong>walk-forward cross-validation</strong>:
+  the historical series is split into K expanding-window folds; each fold trains on
+  everything before the cutoff and predicts the held-out tail. The "Avg score" columns
+  above are the average across these folds. Once the backtest finishes, the winning
+  model is <em>refit on the full history</em> before producing the production forecast,
+  so deployed models use every data point.
+</p>
+{% if per_fold %}
+<div class="chart-card">
+  <div class="chart-title">
+    <h3>Per-fold MAE</h3>
+    <span class="sub">lower is better, oldest fold on the left</span>
+  </div>
+  <canvas id="foldChart"></canvas>
+</div>
+
+<details style="margin-top: 14px">
+  <summary class="sub" style="cursor: pointer">Show per-fold table</summary>
+  <table style="margin-top: 8px">
+    <thead><tr><th>Algo</th><th>Fold</th>{% for s in score_metrics %}<th>{{ s|upper }}</th>{% endfor %}</tr></thead>
+    <tbody>
+    {% for algo, folds in per_fold.items() %}
+      {% for f in folds %}
+      <tr>
+        <td>{% if loop.first %}<span class="pill">{{ algo }}</span>{% endif %}</td>
+        <td class="num">{{ f.fold }}</td>
+        {% for s in score_metrics %}
+        <td class="num">{% if f.get(s) is not none %}{{ "%.3f"|format(f[s]) }}{% else %}—{% endif %}</td>
+        {% endfor %}
+      </tr>
+      {% endfor %}
+    {% endfor %}
+    </tbody>
+  </table>
+</details>
+{% else %}
+<p class="sub">No per-fold data for this run (it may have used a single tail-holdout fallback).</p>
+{% endif %}
+
 <h2>Config snapshot</h2>
 <pre class="code-block">{{ config_snapshot_json }}</pre>
 
 <script>
 const RANK = {{ rank_chart_json|safe }};
 const DUR  = {{ dur_chart_json|safe }};
+const PER_FOLD = {{ per_fold_json|safe }};
 document.addEventListener("DOMContentLoaded", () => {
   if (RANK.length) {
     new Chart(document.getElementById("rankChart"), {
@@ -87,6 +129,27 @@ document.addEventListener("DOMContentLoaded", () => {
                            backgroundColor: DUR.map(r => fc.colors.forAlgo(r.algo)) }] },
       options: { ...fc.commonChartOptions("seconds"),
                  plugins: { legend: { display: false } } },
+    });
+  }
+  const foldCtx = document.getElementById("foldChart");
+  if (foldCtx && Object.keys(PER_FOLD).length) {
+    const algos = Object.keys(PER_FOLD).sort();
+    const maxFolds = Math.max(0, ...algos.map(a => PER_FOLD[a].length));
+    const labels = Array.from({length: maxFolds}, (_, i) => `fold ${i}`);
+    const datasets = algos.map(a => ({
+      label: a,
+      data: labels.map((_, i) => {
+        const f = PER_FOLD[a][i];
+        return f && f.mae != null ? f.mae : null;
+      }),
+      borderColor: fc.colors.forAlgo(a),
+      backgroundColor: fc.colors.forAlgo(a),
+      spanGaps: true, tension: .2, pointRadius: 3,
+    }));
+    new Chart(foldCtx, {
+      type: "line",
+      data: { labels, datasets },
+      options: fc.commonChartOptions("MAE"),
     });
   }
 });

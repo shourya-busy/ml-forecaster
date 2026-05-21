@@ -2,7 +2,7 @@
 {% block title %}Trends{% endblock %}
 {% block content %}
 <h1>Trends</h1>
-<p class="subtitle">Aggregate prediction trajectory and accuracy drift across all instances for a single metric.</p>
+<p class="subtitle">Aggregate forecast trajectory + accuracy drift for one (metric, horizon) over a time window.</p>
 
 <form class="filterbar" method="get">
   <label>Metric
@@ -12,21 +12,53 @@
       {% endfor %}
     </select>
   </label>
-  <span class="sub" style="align-self: center">horizon: <span class="pill">{{ horizon }}</span></span>
+  <label>Horizon
+    <select name="horizon" onchange="this.form.submit()">
+      {% for h in horizons %}
+      <option value="{{ h }}" {% if h == selected_horizon %}selected{% endif %}>{{ h }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Window
+    <select name="window" onchange="this.form.submit()">
+      {% for w in window_presets %}
+      <option value="{{ w }}" {% if w == selected_window %}selected{% endif %}>last {{ w }}</option>
+      {% endfor %}
+      <option value="all" {% if selected_window == 'all' %}selected{% endif %}>all history</option>
+    </select>
+  </label>
+  <label>Aggregation
+    <select name="agg" onchange="this.form.submit()">
+      <option value="mean" {% if selected_agg == 'mean' %}selected{% endif %}>mean</option>
+      <option value="median" {% if selected_agg == 'median' %}selected{% endif %}>median (robust)</option>
+      <option value="p95" {% if selected_agg == 'p95' %}selected{% endif %}>p95</option>
+    </select>
+  </label>
+  <label>Forecast freshness (h)
+    <input type="number" name="fresh_hours" value="{{ fresh_hours }}" min="0" max="720" style="width: 80px">
+  </label>
+  <button class="btn" type="submit">Apply</button>
+  <a class="btn secondary" href="{{ url_for('ui_trends') }}">Reset</a>
 </form>
+
+<p class="subtitle" style="margin-top: 10px">
+  Showing <strong>{{ selected_agg }}</strong> of {{ instance_count }} instance(s) over the last
+  <strong>{{ selected_window }}</strong>, restricted to forecasts whose run completed in the last
+  <strong>{{ fresh_hours }}h</strong>. Drift line uses {{ drift_sample_size }} completed run(s).
+</p>
 
 <div class="two-col" style="margin-top: 14px">
   <div class="chart-card">
     <div class="chart-title">
-      <h3>Mean forecast curve — {{ selected_metric }}</h3>
-      <span class="sub">average across instances at each future timestamp</span>
+      <h3>Forecast trajectory — {{ selected_metric }} / {{ selected_horizon }}</h3>
+      <span class="sub">{{ selected_agg }} across {{ instance_count }} instance(s)</span>
     </div>
-    <canvas id="avgCurve"></canvas>
+    <canvas id="fcCurve"></canvas>
   </div>
   <div class="chart-card">
     <div class="chart-title">
-      <h3>Winner share — {{ selected_metric }}</h3>
-      <span class="sub">historical ranking wins by algorithm</span>
+      <h3>Winner share — {{ selected_window }}</h3>
+      <span class="sub">historical ranking wins by algo for {{ selected_metric }} / {{ selected_horizon }}</span>
     </div>
     <canvas id="winnerShare"></canvas>
   </div>
@@ -35,16 +67,16 @@
 <div class="chart-card" style="margin-top: 14px">
   <div class="chart-title">
     <h3>Accuracy drift — winning model MAE over time</h3>
-    <span class="sub">all completed runs on {{ selected_metric }}, oldest-first</span>
+    <span class="sub">{{ drift_sample_size }} completed run(s), oldest-first; daily median in the line</span>
   </div>
   <canvas id="driftCurve"></canvas>
 </div>
 
 <script>
-const AVG = {{ avg_curve_json|safe }};
-const DRIFT = {{ drift_curve_json|safe }};
-const WINNER_SHARE = {{ winner_share_json|safe }};
-const DISPLAY_TZ = {{ display_timezone|tojson }};
+const FC_CURVE      = {{ forecast_curve_json|safe }};
+const DRIFT_CURVE   = {{ drift_curve_json|safe }};
+const WINNER_SHARE  = {{ winner_share_json|safe }};
+const DISPLAY_TZ    = {{ display_timezone | tojson }};
 
 function fmtTs(iso) {
   try {
@@ -57,26 +89,29 @@ function fmtTs(iso) {
 }
 
 document.addEventListener("DOMContentLoaded", () => {
-  if (AVG.length) {
-    new Chart(document.getElementById("avgCurve"), {
+  if (FC_CURVE.length) {
+    new Chart(document.getElementById("fcCurve"), {
       type: "line",
       data: {
-        labels: AVG.map(p => fmtTs(p.ts)),
+        labels: FC_CURVE.map(p => fmtTs(p.ts)),
         datasets: [{
-          label: "mean forecast",
-          data: AVG.map(p => p.avg),
+          label: "{{ selected_agg }}",
+          data: FC_CURVE.map(p => p.value),
           borderColor: "#38bdf8", backgroundColor: "rgba(56,189,248,.1)",
           fill: true, tension: .2, pointRadius: 0, borderWidth: 2,
         }],
       },
       options: { ...fc.commonChartOptions(), plugins: { legend: { display: false } } },
     });
+  } else {
+    document.getElementById("fcCurve").parentElement.insertAdjacentHTML(
+      "beforeend",
+      "<p class='sub' style='padding: 12px; color: var(--warn)'>No fresh forecasts in this window. Try widening the freshness threshold or run a training cycle.</p>");
   }
 
-  if (DRIFT.length) {
-    // Group MAE by date so the chart shows daily averages
+  if (DRIFT_CURVE.length) {
     const byDay = {};
-    for (const r of DRIFT) {
+    for (const r of DRIFT_CURVE) {
       if (!r.completed_at || r.mae == null) continue;
       const d = r.completed_at.slice(0, 10);
       (byDay[d] = byDay[d] || []).push(r.mae);
@@ -87,7 +122,7 @@ document.addEventListener("DOMContentLoaded", () => {
       data: {
         labels: days,
         datasets: [{
-          label: "median MAE (winning model)",
+          label: "median MAE",
           data: days.map(d => {
             const xs = byDay[d].slice().sort((a, b) => a - b);
             return xs[Math.floor(xs.length / 2)];
@@ -116,6 +151,10 @@ document.addEventListener("DOMContentLoaded", () => {
         plugins: { legend: { position: "right", labels: { color: "#cbd5e1" } } },
       },
     });
+  } else {
+    document.getElementById("winnerShare").parentElement.insertAdjacentHTML(
+      "beforeend",
+      "<p class='sub' style='padding: 12px; color: var(--warn)'>No rankings in this window.</p>");
   }
 });
 </script>

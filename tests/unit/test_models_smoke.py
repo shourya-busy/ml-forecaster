@@ -16,7 +16,7 @@ import pytest
 from forecaster.models import REGISTRY, build
 from tests.fixtures.synthetic_series import synthetic_series
 
-SLOW = {"lstm", "nbeats", "prophet"}
+SLOW = {"lstm", "nbeats", "prophet", "gru", "sarima", "neural_prophet"}
 
 # Map algo name -> optional dependency module that must be importable.
 OPTIONAL_DEPS = {
@@ -25,9 +25,20 @@ OPTIONAL_DEPS = {
     "lightgbm": "lightgbm",
     "lstm": "torch",
     "nbeats": "torch",
+    "gru": "torch",
     "arima": "statsmodels",
     "ets": "statsmodels",
     "holt_winters": "statsmodels",
+    "theta": "statsmodels",
+    "sarima": "statsmodels",
+    "linear_lag": "sklearn",
+    "random_forest": "sklearn",
+    "knn": "sklearn",
+    "auto_arima": "statsforecast",
+    "auto_ets": "statsforecast",
+    "auto_theta": "statsforecast",
+    "mstl": "statsforecast",
+    "neural_prophet": "neuralprophet",
 }
 
 

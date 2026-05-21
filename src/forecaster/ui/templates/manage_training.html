@@ -36,15 +36,109 @@
   </fieldset>
 
   <fieldset style="border: 1px solid var(--border); padding: 14px; border-radius: 6px">
-    <legend>&nbsp;Enabled algorithms&nbsp;</legend>
-    <p class="sub">Tick which models compete during ranking. Per-metric shortlists are configured via YAML (see <code>config/default.yaml</code>) — they must remain a subset of these.</p>
-    <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 6px">
-      {% for algo in all_algos %}
-      <label style="display: flex; align-items: center; gap: 6px">
-        <input type="checkbox" name="enabled_algos" value="{{ algo }}" {% if algo in algorithms.enabled %}checked{% endif %}>
-        {{ algo }}
+    <legend>&nbsp;Algorithm library &nbsp;<span class="sub" id="algo-counter">({{ total_enabled }} of {{ total_registered }} enabled)</span>&nbsp;</legend>
+    <p class="sub">
+      Algorithms are grouped by family. Tick any combination — selection is global, so you can mix and match across categories (e.g. one baseline + one statistical + one ML). Each enabled algo is auto-trained for every (server, metric, horizon), ranked, and the winner serves the forecast. Per-metric shortlists in <code>config/default.yaml::algorithms.per_metric</code> further narrow which compete for each metric.
+    </p>
+
+    <div class="filterbar" style="margin: 4px 0 12px">
+      <button class="btn secondary" type="button" onclick="algoBulk(true)">Enable all</button>
+      <button class="btn secondary" type="button" onclick="algoBulk(false)">Disable all</button>
+      <span class="sub" style="align-self: center">Bulk toggles only update the checkboxes — click Save all below to persist.</span>
+    </div>
+
+    {% for fam, algos in grouped_sections %}
+      {% set enabled_in_fam = (algos | select('in', algorithms.enabled) | list | length) %}
+      <h3 style="margin: 18px 0 8px; display: flex; align-items: center; gap: 8px">
+        {% if fam == 'baseline' %}🎯 Baseline
+        {% elif fam == 'statistical' %}📈 Statistical
+        {% elif fam == 'ml' %}🌲 Machine learning
+        {% elif fam == 'deep-learning' %}🧠 Deep learning
+        {% else %}{{ fam }}{% endif %}
+        <span class="sub" style="font-weight: normal; font-size: 12px">({{ enabled_in_fam }} of {{ algos | length }} enabled)</span>
+        <button class="btn secondary" type="button" style="margin-left: auto; padding: 2px 8px; font-size: 11px"
+                onclick="algoBulkFamily({{ algos | tojson }}, true)">enable group</button>
+        <button class="btn secondary" type="button" style="padding: 2px 8px; font-size: 11px"
+                onclick="algoBulkFamily({{ algos | tojson }}, false)">disable group</button>
+      </h3>
+      <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 10px">
+        {% for algo in algos %}
+        {% set info = algo_info[algo] %}
+        <label class="card algo-card" data-algo="{{ algo }}" style="display: flex; gap: 10px; align-items: flex-start; cursor: pointer; {% if algo in algorithms.enabled %}border-color: var(--accent);{% endif %}">
+          <input type="checkbox" name="enabled_algos" value="{{ algo }}" {% if algo in algorithms.enabled %}checked{% endif %} style="margin-top: 4px" onchange="algoStyle(this)">
+          <div style="flex: 1">
+            <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap">
+              <strong>{{ algo }}</strong>
+              <span class="pill muted" style="font-size: 10px">{{ info.family }}</span>
+              <span class="pill muted" style="font-size: 10px">{{ info.complexity }}</span>
+              <span class="pill muted" style="font-size: 10px">{{ info.speed }}</span>
+            </div>
+            <p class="sub" style="margin: 6px 0 4px">{{ info.description }}</p>
+            <p class="sub" style="margin: 0; color: var(--text); font-size: 12px"><strong>When:</strong> {{ info.when_to_use }}</p>
+          </div>
+        </label>
+        {% endfor %}
+      </div>
+    {% endfor %}
+
+    <p class="sub" style="margin-top: 14px">
+      <strong>Why can't I add new algorithms from this page?</strong>
+      Adding a model means executing new Python inside the worker — that's an arbitrary-code-execution surface and doesn't belong behind a web form. The {{ total_registered }} algorithms above span every major forecasting family. If you genuinely need another, add a file under <code>src/forecaster/models/</code>, decorate the class with <code>@register("name")</code>, and rebuild — it appears here automatically. See <code>docs/adding-an-algorithm.md</code>.
+    </p>
+  </fieldset>
+
+  <script>
+  function algoStyle(cb) {
+    const card = cb.closest(".algo-card");
+    card.style.borderColor = cb.checked ? "var(--accent)" : "var(--border)";
+    updateAlgoCounter();
+  }
+  function algoBulk(state) {
+    document.querySelectorAll("input[name=enabled_algos]").forEach(cb => {
+      cb.checked = state; algoStyle(cb);
+    });
+  }
+  function algoBulkFamily(names, state) {
+    const set = new Set(names);
+    document.querySelectorAll("input[name=enabled_algos]").forEach(cb => {
+      if (set.has(cb.value)) { cb.checked = state; algoStyle(cb); }
+    });
+  }
+  function updateAlgoCounter() {
+    const total = document.querySelectorAll("input[name=enabled_algos]").length;
+    const on = document.querySelectorAll("input[name=enabled_algos]:checked").length;
+    const el = document.getElementById("algo-counter");
+    if (el) el.textContent = `(${on} of ${total} enabled)`;
+  }
+  </script>
+
+  <fieldset style="border: 1px solid var(--border); padding: 14px; border-radius: 6px">
+    <legend>&nbsp;Outlier filtering (preprocessing)&nbsp;</legend>
+    <p class="sub">
+      Optionally drop anomalous points from the training history before fitting models,
+      so a deployment spike or monitoring blip doesn't pull the forecast off-trend.
+      Uses scikit-learn's <strong>Isolation Forest</strong> on sliding-window features.
+      <br><em>Note: this is preprocessing, not a forecaster. Isolation Forest itself does
+      not produce future-value predictions; that's why it's here and not in the
+      Algorithm library above.</em>
+    </p>
+    <div class="grid" style="grid-template-columns: 1fr 1fr 1fr; gap: 14px">
+      <label style="display: flex; align-items: center; gap: 8px">
+        <input type="checkbox" name="anomaly_filter_enabled"
+               {% if training.anomaly_filter.enabled %}checked{% endif %}>
+        <span><strong>Enable</strong> outlier filtering</span>
       </label>
-      {% endfor %}
+      <label>Expected contamination
+        <span class="sub">(0.001 – 0.5; current: {{ training.anomaly_filter.contamination }})</span>
+        <input type="number" step="0.005" min="0.001" max="0.5"
+               name="anomaly_contamination"
+               placeholder="{{ training.anomaly_filter.contamination }}"
+               style="width: 100%; background: var(--panel); color: var(--text); border: 1px solid var(--border); padding: 6px; border-radius: 4px"></label>
+      <label>Window size
+        <span class="sub">(lag-vector length; current: {{ training.anomaly_filter.window }})</span>
+        <input type="number" min="1" max="500" name="anomaly_window"
+               placeholder="{{ training.anomaly_filter.window }}"
+               style="width: 100%; background: var(--panel); color: var(--text); border: 1px solid var(--border); padding: 6px; border-radius: 4px"></label>
     </div>
   </fieldset>
 
