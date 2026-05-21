@@ -1415,6 +1415,8 @@ async def manage_training_save(
     _set_or_delete(repo, "training.backtest_folds", _g("backtest_folds"), int)
     _set_or_delete(repo, "training.parallelism.workers", _g("workers"), int)
     _set_or_delete(repo, "training.parallelism.algos_per_job", _g("algos_per_job"), int)
+    _set_or_delete(repo, "training.parallelism.fetch_jitter_seconds",
+                   _g("fetch_jitter_seconds"), int)
     _set_or_delete(repo, "training.confidence_alpha", _g("confidence_alpha"), float)
 
     weights = {

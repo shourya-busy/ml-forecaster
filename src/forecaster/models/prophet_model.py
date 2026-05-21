@@ -50,7 +50,9 @@ class ProphetForecaster(BaseForecaster):
         m.fit(df)
         self._model = m
         self._last_ts = series.index[-1]
-        self._step = pd.infer_freq(series.index) or (series.index[1] - series.index[0])
+        # pandas 4.x rejects bare alias strings like "min" / "h" / "D" in
+        # pd.Timedelta(), so always compute step from observed spacing.
+        self._step = pd.Timedelta(series.index[1] - series.index[0])
         # In-sample residuals for free residual-based bounds (we still
         # prefer Prophet's native intervals in predict_interval).
         in_pred = m.predict(df[["ds"]])["yhat"].values

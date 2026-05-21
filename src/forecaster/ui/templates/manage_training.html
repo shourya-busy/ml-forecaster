@@ -15,26 +15,48 @@
 
   <fieldset class="fs">
     <legend>Training limits</legend>
+    <p class="fs-help">
+      Pills tag each setting: <span class="pill pill-good">live</span> means the next scheduled run picks the change up automatically (~60s);
+      <span class="pill pill-warn">restart</span> means the worker container has to be restarted (the setting is stored, but isn't read again until then).
+    </p>
     <div class="field-grid">
       <label class="field">
-        <span class="field-label">Lookback days <span class="sub">(current: {{ training.lookback_days }})</span></span>
+        <span class="field-label">Lookback days <span class="pill pill-good">live</span> <span class="sub">(current: {{ training.lookback_days }})</span></span>
         <input type="number" min="1" max="365" name="lookback_days" placeholder="{{ training.lookback_days }}">
       </label>
       <label class="field">
-        <span class="field-label">Backtest folds <span class="sub">(current: {{ training.backtest_folds }})</span></span>
+        <span class="field-label">Backtest folds <span class="pill pill-good">live</span> <span class="sub">(current: {{ training.backtest_folds }})</span></span>
         <input type="number" min="1" max="20" name="backtest_folds" placeholder="{{ training.backtest_folds }}">
       </label>
       <label class="field">
-        <span class="field-label">Celery worker concurrency <span class="sub">(current: {{ training.parallelism.workers }})</span></span>
-        <input type="number" min="1" max="32" name="workers" placeholder="{{ training.parallelism.workers }}">
-      </label>
-      <label class="field">
-        <span class="field-label">Algos per job <span class="sub">(current: {{ training.parallelism.algos_per_job }})</span></span>
-        <input type="number" min="1" max="16" name="algos_per_job" placeholder="{{ training.parallelism.algos_per_job }}">
-      </label>
-      <label class="field">
-        <span class="field-label">Confidence alpha <span class="sub">(0.05 = 95%; current: {{ training.confidence_alpha }})</span></span>
+        <span class="field-label">Confidence alpha <span class="pill pill-good">live</span> <span class="sub">(0.05 = 95%; current: {{ training.confidence_alpha }})</span></span>
         <input type="number" step="0.01" min="0.01" max="0.5" name="confidence_alpha" placeholder="{{ training.confidence_alpha }}">
+      </label>
+    </div>
+  </fieldset>
+
+  <fieldset class="fs">
+    <legend>Parallelism</legend>
+    <p class="fs-help">
+      Two knobs control how many things happen at once. <strong>Concurrent training jobs</strong> is the number of <em>tasks</em> a single Celery worker pulls off the queue in parallel — capped by Celery's <code>--concurrency</code> flag, which is set from the <code>CELERY_CONCURRENCY</code> env var at container startup. Restarting the worker (e.g. <code>docker compose restart worker</code>) picks up a new value.
+      <strong>Algos per job</strong> is the in-task thread-pool size used by <code>train_all_algos</code>; this one IS read on every run.
+      <strong>Fetch jitter</strong> spreads fan-out load by randomising the per-target start time across this window.
+    </p>
+    <div class="field-grid">
+      <label class="field">
+        <span class="field-label">Concurrent training jobs <span class="pill pill-warn">restart</span> <span class="sub">(current: {{ training.parallelism.workers }})</span></span>
+        <input type="number" min="1" max="32" name="workers" placeholder="{{ training.parallelism.workers }}">
+        <span class="sub">stored as <code>CELERY_CONCURRENCY</code> target; restart the worker container to apply.</span>
+      </label>
+      <label class="field">
+        <span class="field-label">Algos per job <span class="pill pill-good">live</span> <span class="sub">(current: {{ training.parallelism.algos_per_job }})</span></span>
+        <input type="number" min="1" max="16" name="algos_per_job" placeholder="{{ training.parallelism.algos_per_job }}">
+        <span class="sub">in-task thread-pool size; takes effect on the next run.</span>
+      </label>
+      <label class="field">
+        <span class="field-label">Fetch jitter (seconds) <span class="pill pill-good">live</span> <span class="sub">(current: {{ training.parallelism.fetch_jitter_seconds }})</span></span>
+        <input type="number" min="0" max="3600" name="fetch_jitter_seconds" placeholder="{{ training.parallelism.fetch_jitter_seconds }}">
+        <span class="sub">spreads scheduler fan-out across this window to avoid hammering Prometheus.</span>
       </label>
     </div>
   </fieldset>

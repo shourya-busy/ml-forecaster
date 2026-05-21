@@ -45,6 +45,7 @@ class NeuralProphetForecaster(BaseForecaster):
         self.yearly = yearly_seasonality
 
     def fit(self, series: pd.Series) -> None:
+        import torch
         from neuralprophet import NeuralProphet, set_log_level
 
         warnings.filterwarnings("ignore")
@@ -63,15 +64,28 @@ class NeuralProphetForecaster(BaseForecaster):
             yearly_seasonality=self.yearly,
             quantiles=[0.025, 0.975],
         )
-        m.fit(df, freq="auto", progress=None)
+        # PyTorch 2.6+ defaults torch.load(weights_only=True). PL's LR-finder
+        # writes a checkpoint mid-fit then loads it back, and that checkpoint
+        # contains NeuralProphet config dataclasses (ConfigSeasonality etc.)
+        # which aren't in torch's safe-globals allowlist. We're loading a
+        # checkpoint we wrote two seconds ago in-process, so weights_only=False
+        # is safe. Patch torch.load for the duration of m.fit() only.
+        _orig_torch_load = torch.load
+        def _trusted_load(*a, **kw):
+            kw.setdefault("weights_only", False)
+            return _orig_torch_load(*a, **kw)
+        torch.load = _trusted_load
+        try:
+            m.fit(df, freq="auto", progress=None)
+        finally:
+            torch.load = _orig_torch_load
         self._model = m
         self._train_df = df
         self._last_ts = series.index[-1]
-        # Use either inferred freq or the spacing between the last two points
-        try:
-            self._step = pd.infer_freq(series.index) or (series.index[1] - series.index[0])
-        except Exception:  # noqa: BLE001
-            self._step = series.index[1] - series.index[0]
+        # Always derive step from observed spacing — pd.infer_freq() can
+        # return bare aliases like "min" which pd.Timedelta() rejects on
+        # pandas 4.x.
+        self._step = pd.Timedelta(series.index[1] - series.index[0])
         # In-sample residuals for the residual-based interval fallback
         try:
             preds = m.predict(df)
