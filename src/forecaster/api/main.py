@@ -10,15 +10,18 @@ from fastapi.responses import RedirectResponse
 
 from ..config.loader import reload_settings
 from ..observability.logging import configure_logging
-from ..ui import router as ui_router, static_app as ui_static_app
+from ..ui import router as ui_router
+from ..ui import static_app as ui_static_app
+from .prometheus_export import router as metrics_router
+from .routes import ai as ai_route
 from .routes import config as cfg_route
 from .routes import diagnostics as diagnostics_route
+from .routes import explore as explore_route
 from .routes import forecasts as forecasts_route
 from .routes import health as health_route
 from .routes import models as models_route
 from .routes import rankings as rankings_route
 from .routes import runs as runs_route
-from .prometheus_export import router as metrics_router
 
 
 def create_app() -> FastAPI:
@@ -38,6 +41,8 @@ def create_app() -> FastAPI:
     app.include_router(models_route.router)
     app.include_router(cfg_route.router)
     app.include_router(diagnostics_route.router)
+    app.include_router(explore_route.router)
+    app.include_router(ai_route.router)
     app.include_router(ui_router)
     app.mount("/ui/static", ui_static_app, name="ui-static")
 

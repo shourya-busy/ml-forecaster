@@ -1,0 +1,142 @@
+{# Single forecast-vs-actual chart card. HTMX target for the gallery. #}
+<div class="chart-card chart-tile">
+  <div class="chart-card-head">
+    <h3>
+      <a href="{{ url_for('ui_target_detail', instance=instance, metric=metric, horizon=horizon) }}">
+        <span class="code">{{ instance }}</span>
+      </a>
+      · {{ metric }} · {{ horizon }}
+    </h3>
+    <span style="display:flex; gap: var(--space-2); align-items:center;">
+      {% if best_algo %}
+        <span class="pill pill-primary">{{ best_algo }}</span>
+      {% endif %}
+      {% if actuals_count %}<span class="sub">· {{ actuals_count }} actual pt{{ '' if actuals_count == 1 else 's' }}</span>{% endif %}
+      {% if by_algo %}
+      <button type="button" class="btn btn-secondary btn-sm ai-explain-btn"
+              data-ai-context-fn="fcAIContext.tile_{{ instance|replace('.', '_')|replace(':', '_')|replace('-', '_') }}_{{ metric }}_{{ horizon }}"
+              data-ai-title="{{ instance }} · {{ metric }} · {{ horizon }}">
+        Explain (AI)
+      </button>
+      {% endif %}
+    </span>
+  </div>
+  {% if not by_algo %}
+    <div class="chart-empty">No forecast yet — trigger a run from
+      <a href="{{ url_for('ui_target_detail', instance=instance, metric=metric, horizon=horizon) }}">the target page</a>.
+    </div>
+  {% else %}
+  <canvas id="tile-{{ instance|replace('.', '_')|replace(':', '_') }}-{{ metric }}-{{ horizon }}"></canvas>
+  <script>
+  (function() {
+    const BY_ALGO = {{ by_algo_json|safe }};
+    const ACTUALS = {{ actuals_json|safe }};
+    const BEST_ALGO = {{ best_algo|tojson }};
+    const SHOW_BANDS = {{ show_bands|tojson }};
+    const OVERLAY = {{ overlay_algos|tojson }};
+    const DISPLAY_TZ = {{ display_timezone|tojson }};
+    const canvas = document.getElementById(
+      "tile-{{ instance|replace('.', '_')|replace(':', '_') }}-{{ metric }}-{{ horizon }}"
+    );
+    if (!canvas || !window.Chart) return;
+
+    const fmt = (iso) => {
+      try {
+        return new Intl.DateTimeFormat("en-IN", {
+          timeZone: DISPLAY_TZ,
+          month: "short", day: "2-digit",
+          hour: "2-digit", minute: "2-digit", hour12: false,
+        }).format(new Date(iso));
+      } catch (_) { return iso; }
+    };
+
+    // Build a unified, sorted timestamp axis across forecasts + actuals.
+    const tsSet = new Set();
+    for (const algo of Object.keys(BY_ALGO)) {
+      for (const p of BY_ALGO[algo]) tsSet.add(p.ts);
+    }
+    for (const p of ACTUALS) tsSet.add(p.ts);
+    const allTs = [...tsSet].sort();
+
+    const bestPts = BY_ALGO[BEST_ALGO] || [];
+    const bestMap = new Map(bestPts.map(p => [p.ts, p]));
+    const acMap = new Map(ACTUALS.map(p => [p.ts, p]));
+
+    const datasets = [];
+    if (SHOW_BANDS) {
+      datasets.push({
+        label: "lower", data: allTs.map(t => { const p = bestMap.get(t); return p ? p.lower : null; }),
+        borderColor: "rgba(56,189,248,0)", backgroundColor: "rgba(56,189,248,.18)",
+        fill: "+1", pointRadius: 0, tension: .2, spanGaps: true,
+      });
+      datasets.push({
+        label: "upper", data: allTs.map(t => { const p = bestMap.get(t); return p ? p.upper : null; }),
+        borderColor: "rgba(56,189,248,0)", backgroundColor: "rgba(56,189,248,.18)",
+        fill: false, pointRadius: 0, tension: .2, spanGaps: true,
+      });
+    }
+    // Best algo line (always drawn)
+    datasets.push({
+      label: "forecast (" + (BEST_ALGO || "best") + ")",
+      data: allTs.map(t => { const p = bestMap.get(t); return p ? p.point : null; }),
+      borderColor: fc.colors.forAlgo(BEST_ALGO || "best"),
+      backgroundColor: "transparent",
+      borderWidth: 2, fill: false, pointRadius: 0, tension: .2, spanGaps: true,
+    });
+    // Optional: overlay every other algo's point estimate (no bands).
+    if (OVERLAY) {
+      for (const algo of Object.keys(BY_ALGO)) {
+        if (algo === BEST_ALGO) continue;
+        const m = new Map(BY_ALGO[algo].map(p => [p.ts, p]));
+        datasets.push({
+          label: algo,
+          data: allTs.map(t => { const p = m.get(t); return p ? p.point : null; }),
+          borderColor: fc.colors.forAlgo(algo),
+          backgroundColor: "transparent",
+          borderWidth: 1, borderDash: [2, 4],
+          fill: false, pointRadius: 0, tension: .2, spanGaps: true,
+        });
+      }
+    }
+    // Actual line (dashed green) so eyeball comparison is immediate.
+    datasets.push({
+      label: "actual",
+      data: allTs.map(t => { const p = acMap.get(t); return p ? p.value : null; }),
+      borderColor: "#22c55e", backgroundColor: "transparent",
+      borderWidth: 2, borderDash: [4, 4], fill: false, pointRadius: 0,
+      tension: .2, spanGaps: true,
+    });
+
+    new Chart(canvas, {
+      type: "line",
+      data: { labels: allTs.map(fmt), datasets },
+      options: fc.commonChartOptions(),
+    });
+
+    // Per-tile AI context builder. Each tile registers under a unique key
+    // matching the button's data-ai-context-fn.
+    window.fcAIContext = window.fcAIContext || {};
+    const ctxKey =
+      "tile_{{ instance|replace('.', '_')|replace(':', '_')|replace('-', '_') }}"
+      + "_{{ metric }}_{{ horizon }}";
+    window.fcAIContext[ctxKey] = function() {
+      const bestPts2 = BY_ALGO[BEST_ALGO] || [];
+      return {
+        kind: "forecast",
+        title: {{ instance|tojson }} + " · " + {{ metric|tojson }} + " · " + {{ horizon|tojson }},
+        instance: {{ instance|tojson }},
+        metric: {{ metric|tojson }},
+        horizon: {{ horizon|tojson }},
+        best_algo: BEST_ALGO,
+        actuals: ACTUALS.map(p => ({ ts: p.ts, value: p.value })),
+        forecast: bestPts2.map(p => ({ ts: p.ts, point: p.point, lower: p.lower, upper: p.upper })),
+        extra: { tile: true },
+      };
+    };
+    if (window.fcAI && typeof window.fcAI.refresh === "function") {
+      window.fcAI.refresh();
+    }
+  })();
+  </script>
+  {% endif %}
+</div>

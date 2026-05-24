@@ -227,6 +227,23 @@ class ArtifactStoreConfig(BaseModel):
     s3_prefix: str = ""
 
 
+# ---------- AI explainer (Ollama) ----------
+
+class OllamaConfig(BaseModel):
+    base_url: str = "http://ollama:11434"
+    model: str = "llama3.2"
+    timeout_seconds: int = 60
+    # Cap how much of the chart's data we send into the prompt. Long series
+    # blow past the model's context window and slow down the response; the
+    # explainer downsamples to roughly this many points before formatting.
+    max_points_in_prompt: int = 60
+
+
+class AIConfig(BaseModel):
+    enabled: bool = True  # set to false to hide the "Explain (AI)" buttons
+    ollama: OllamaConfig = Field(default_factory=OllamaConfig)
+
+
 # ---------- top level ----------
 
 class Settings(BaseModel):
@@ -239,6 +256,7 @@ class Settings(BaseModel):
     data_sources: DataSourcesConfig
     exposition: ExpositionConfig = Field(default_factory=ExpositionConfig)
     artifact_store: ArtifactStoreConfig = Field(default_factory=ArtifactStoreConfig)
+    ai: AIConfig = Field(default_factory=AIConfig)
 
     # runtime / infra
     database_url: str = "postgresql+psycopg://forecaster:forecaster@postgres:5432/forecaster"

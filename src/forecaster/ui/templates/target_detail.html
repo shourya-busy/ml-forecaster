@@ -71,7 +71,15 @@
 <div class="chart-grid-2">
   <div class="chart-card">
     <div class="chart-card-head"><h3>Forecast (best model)</h3>
-      <span class="sub">{{ forecasts|length }} future points · {{ lookback_hours }}h of past actuals</span></div>
+      <span style="display:flex; gap: var(--space-2); align-items:center;">
+        <span class="sub">{{ forecasts|length }} future points · {{ lookback_hours }}h of past actuals</span>
+        <button type="button" class="btn btn-secondary btn-sm ai-explain-btn"
+                data-ai-context-fn="fcAIContext.targetDetail"
+                data-ai-title="{{ instance }} · {{ metric }} · {{ horizon }}">
+          Explain (AI)
+        </button>
+      </span>
+    </div>
     <canvas id="forecastChart"></canvas>
   </div>
   <div class="chart-card">
@@ -150,6 +158,22 @@ document.addEventListener("DOMContentLoaded", () => {
   drawWinnerHistory();
   drawScoreHistory("mae");
 });
+
+// Context builder for the AI explainer (target_detail forecast chart).
+window.fcAIContext = window.fcAIContext || {};
+window.fcAIContext.targetDetail = function() {
+  return {
+    kind: "forecast",
+    title: {{ instance|tojson }} + " · " + {{ metric|tojson }} + " · " + {{ horizon|tojson }},
+    instance: {{ instance|tojson }},
+    metric: {{ metric|tojson }},
+    horizon: {{ horizon|tojson }},
+    best_algo: (RANKING_DATA[0] && RANKING_DATA[0].algo) || null,
+    actuals: ACTUALS_DATA.map(p => ({ ts: p.ts, value: p.value })),
+    forecast: FORECAST_DATA.map(p => ({ ts: p.ts, point: p.point, lower: p.lower, upper: p.upper })),
+    extra: { lookback_hours: {{ lookback_hours|tojson }} },
+  };
+};
 
 function drawForecast() {
   const ctx = document.getElementById("forecastChart");

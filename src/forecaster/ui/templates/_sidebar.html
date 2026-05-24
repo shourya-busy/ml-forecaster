@@ -37,6 +37,14 @@
 
     <div class="sidebar-group">
       <div class="sidebar-group-label">Analytics</div>
+      <a class="sidebar-link {% if active == 'graphs' %}is-active{% endif %}"
+         href="{{ url_for('ui_graphs') }}">
+        <span class="link-text">Graphs</span>
+      </a>
+      <a class="sidebar-link {% if active == 'explore' %}is-active{% endif %}"
+         href="{{ url_for('ui_explore') }}">
+        <span class="link-text">Explore</span>
+      </a>
       <a class="sidebar-link {% if active == 'trends' %}is-active{% endif %}"
          href="{{ url_for('ui_trends') }}">
         <span class="link-text">Trends</span>
@@ -80,6 +88,10 @@
       <a class="sidebar-link {% if active == 'manage' and subnav == 'training' %}is-active{% endif %}"
          href="{{ url_for('ui_manage_training') }}">
         <span class="link-text">Training</span>
+      </a>
+      <a class="sidebar-link {% if active == 'manage' and subnav == 'ai' %}is-active{% endif %}"
+         href="{{ url_for('ui_manage_ai') }}">
+        <span class="link-text">AI</span>
       </a>
       <a class="sidebar-link {% if active == 'config' %}is-active{% endif %}"
          href="{{ url_for('ui_config') }}">

@@ -1,0 +1,147 @@
+{% extends "base.html" %}
+{% block title %}AI settings{% endblock %}
+{% block crumbs %}
+  <a href="{{ url_for('ui_manage_targets') }}">Settings</a>
+  <span class="crumb-sep">/</span>
+  <span class="crumb-current">AI</span>
+{% endblock %}
+{% block content %}
+
+<div class="page-header">
+  <div class="page-header-text">
+    <h1>AI explainer</h1>
+    <p class="subtitle">
+      Configure the Ollama server that powers the
+      <span class="code">Explain (AI)</span> buttons on the forecast and explore charts.
+      Edits here override values from <span class="code">config/default.yaml</span> and
+      environment variables; take effect on the next request (typically within ~15 s).
+    </p>
+  </div>
+</div>
+
+{% if saved %}
+<div class="notice notice-good" style="margin-bottom: var(--space-4);">
+  <span class="notice-title">Saved.</span>
+  <span>The new settings are now in effect. Click <em>Test connection</em> to verify Ollama is reachable.</span>
+</div>
+{% endif %}
+
+<form method="post" action="{{ url_for('ui_manage_ai_save') }}">
+  <fieldset class="fs">
+    <legend>Status</legend>
+    <p class="fs-help">
+      When disabled, every <span class="code">Explain (AI)</span> button in the UI is hidden and
+      <span class="code">POST /ai/explain</span> returns 503.
+    </p>
+    <label class="field-inline">
+      <input type="checkbox" name="enabled" value="1" {% if ai.enabled %}checked{% endif %}>
+      <span>AI explainer enabled</span>
+      {% if override_status['ai.enabled'] %}
+        <span class="pill pill-purple" title="This value is overridden via DB; clear it to fall back to YAML/env.">overridden</span>
+      {% endif %}
+    </label>
+  </fieldset>
+
+  <fieldset class="fs" style="margin-top: var(--space-4);">
+    <legend>Ollama server</legend>
+    <p class="fs-help">
+      Points at any Ollama-compatible HTTP server. Common forms:
+      <span class="code">http://ollama:11434</span> (container on the same docker network),
+      <span class="code">http://host.docker.internal:11434</span> (host's Ollama from a container on Mac/Windows),
+      or a remote URL with auth handled upstream.
+    </p>
+    <div class="field-grid">
+      <label class="field">
+        <span class="field-label">
+          Base URL
+          {% if override_status['ai.ollama.base_url'] %}
+            <span class="pill pill-purple">overridden</span>
+          {% endif %}
+        </span>
+        <input type="text" name="base_url" id="aiBaseUrl"
+               value="{{ ollama.base_url }}"
+               placeholder="http://ollama:11434">
+      </label>
+      <label class="field">
+        <span class="field-label">
+          Model
+          {% if override_status['ai.ollama.model'] %}
+            <span class="pill pill-purple">overridden</span>
+          {% endif %}
+        </span>
+        <input type="text" name="model" id="aiModel" list="aiModelList"
+               value="{{ ollama.model }}"
+               placeholder="llama3.2">
+        <datalist id="aiModelList"></datalist>
+        <span class="sub">
+          Any model already pulled on the server. The
+          <em>Test connection</em> button below also populates suggestions.
+        </span>
+      </label>
+      <label class="field">
+        <span class="field-label">
+          Timeout (seconds)
+          {% if override_status['ai.ollama.timeout_seconds'] %}
+            <span class="pill pill-purple">overridden</span>
+          {% endif %}
+        </span>
+        <input type="number" name="timeout_seconds" min="5" max="600"
+               value="{{ ollama.timeout_seconds }}">
+        <span class="sub">Caps how long the API waits for an explanation.</span>
+      </label>
+      <label class="field">
+        <span class="field-label">
+          Max chart points sent to model
+          {% if override_status['ai.ollama.max_points_in_prompt'] %}
+            <span class="pill pill-purple">overridden</span>
+          {% endif %}
+        </span>
+        <input type="number" name="max_points_in_prompt" min="10" max="500"
+               value="{{ ollama.max_points_in_prompt }}">
+        <span class="sub">
+          The chart's actuals and forecast are downsampled to roughly this many points
+          before being formatted into the prompt. Higher = more detail, but slower and
+          may overflow the model's context window.
+        </span>
+      </label>
+    </div>
+
+    <div class="toolbar" style="margin-top: var(--space-4);">
+      <button class="btn btn-secondary btn-sm" type="button"
+              hx-post="{{ url_for('ui_manage_ai_test') }}"
+              hx-include="#aiBaseUrl"
+              hx-target="#aiTestResult" hx-swap="innerHTML">
+        Test connection
+      </button>
+      <span id="aiTestResult" class="sub"></span>
+    </div>
+  </fieldset>
+
+  <div class="toolbar" style="margin-top: var(--space-5);">
+    <button class="btn" type="submit">Save</button>
+    <span class="toolbar-spacer"></span>
+    <button class="btn btn-ghost btn-sm" type="submit"
+            formaction="{{ url_for('ui_manage_ai_reset') }}"
+            formnovalidate
+            onclick="return confirm('Clear every AI override and fall back to YAML/env defaults?');">
+      Reset to defaults
+    </button>
+  </div>
+</form>
+
+<script>
+// On page load, prefetch the model list so the datalist offers suggestions
+// without the user having to click "Test connection".
+document.addEventListener("DOMContentLoaded", async () => {
+  try {
+    const r = await fetch("/ai/models");
+    if (!r.ok) return;
+    const data = await r.json();
+    const dl = document.getElementById("aiModelList");
+    if (!dl || !data.models) return;
+    dl.innerHTML = data.models.map(m => `<option value="${m}">`).join("");
+  } catch (_) { /* silent — test button gives explicit feedback */ }
+});
+</script>
+
+{% endblock %}

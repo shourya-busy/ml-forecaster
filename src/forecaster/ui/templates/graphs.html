@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+{% block title %}Graphs{% endblock %}
+{% block crumbs %}<span class="crumb-current">Graphs</span>{% endblock %}
+{% block content %}
+
+<div class="page-header">
+  <div class="page-header-text">
+    <h1>Graphs</h1>
+    <p class="subtitle">
+      Forecast bands vs live Prometheus actuals — one tile per
+      <span class="code">(instance · metric · horizon)</span>.
+      {{ matched_total }} of {{ all_total }} target{{ '' if all_total == 1 else 's' }} match the current filter.
+    </p>
+  </div>
+</div>
+
+<form method="get" action="{{ url_for('ui_graphs') }}" class="toolbar" id="graphsFilter">
+  {# Multi-select dropdowns submit as repeated query params via JS below #}
+  <label class="field-inline">
+    <span class="sub">Instance</span>
+    <select name="instance" multiple size="1" data-multi>
+      {% for opt in all_instances %}
+        <option value="{{ opt }}" {% if opt in filters.instance %}selected{% endif %}>{{ opt }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label class="field-inline">
+    <span class="sub">Metric</span>
+    <select name="metric" multiple size="1" data-multi>
+      {% for opt in all_metrics %}
+        <option value="{{ opt }}" {% if opt in filters.metric %}selected{% endif %}>{{ opt }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label class="field-inline">
+    <span class="sub">Horizon</span>
+    <select name="horizon" multiple size="1" data-multi>
+      {% for opt in all_horizons %}
+        <option value="{{ opt }}" {% if opt in filters.horizon %}selected{% endif %}>{{ opt }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label class="field-inline">
+    <span class="sub">Lookback (h)</span>
+    <input type="number" name="lookback_hours" min="0" max="720"
+           value="{{ filters.lookback_hours }}" style="width: 80px">
+  </label>
+  <label class="field-inline">
+    <input type="checkbox" name="bands" value="1" {% if filters.bands %}checked{% endif %}>
+    <span class="sub">Bands</span>
+  </label>
+  <label class="field-inline">
+    <input type="checkbox" name="overlay_algos" value="1" {% if filters.overlay_algos %}checked{% endif %}>
+    <span class="sub">Overlay all algorithms</span>
+  </label>
+  <span class="toolbar-spacer"></span>
+  <button class="btn" type="submit">Apply</button>
+  <a class="btn btn-ghost btn-sm" href="{{ url_for('ui_graphs') }}">Clear</a>
+</form>
+
+{% if matched_total > page_size %}
+<div class="notice notice-warn">
+  <span class="notice-title">Showing {{ tiles|length }} of {{ matched_total }}.</span>
+  <span>Narrow the filter or use the page controls below. (Each tile makes its own
+  call to Prometheus so a large gallery can be slow.)</span>
+</div>
+{% endif %}
+
+{% if not tiles %}
+<div class="chart-empty">
+  No targets match. Either no runs have completed yet for this filter, or the
+  selection is empty — try clearing filters.
+</div>
+{% else %}
+<div class="chart-grid-3">
+  {% for t in tiles %}
+    {% set tile_url = url_for('ui_graph_tile') ~ '?instance=' ~ t.instance ~ '&metric=' ~ t.metric ~ '&horizon=' ~ t.horizon ~ '&lookback_hours=' ~ filters.lookback_hours ~ '&bands=' ~ filters.bands ~ '&overlay_algos=' ~ filters.overlay_algos %}
+    <div class="chart-card chart-tile-loading"
+         hx-get="{{ tile_url }}"
+         hx-trigger="revealed"
+         hx-swap="outerHTML">
+      <div class="chart-card-head">
+        <h3>
+          <a href="{{ url_for('ui_target_detail', instance=t.instance, metric=t.metric, horizon=t.horizon) }}">
+            <span class="code">{{ t.instance }}</span>
+          </a>
+          · {{ t.metric }} · {{ t.horizon }}
+        </h3>
+        <span class="sub">loading…</span>
+      </div>
+      <div class="chart-empty">fetching forecast + actuals…</div>
+    </div>
+  {% endfor %}
+</div>
+
+{% if page_count > 1 %}
+<nav class="pagination">
+  {% if page > 1 %}
+    <a class="btn btn-ghost btn-sm" href="?{{ request.url.query|replace('page=' ~ page, 'page=' ~ (page - 1)) if 'page=' in request.url.query else request.url.query ~ '&page=' ~ (page - 1) }}">← prev</a>
+  {% endif %}
+  <span class="sub">page {{ page }} / {{ page_count }}</span>
+  {% if page < page_count %}
+    <a class="btn btn-ghost btn-sm" href="?{{ request.url.query|replace('page=' ~ page, 'page=' ~ (page + 1)) if 'page=' in request.url.query else request.url.query ~ '&page=' ~ (page + 1) }}">next →</a>
+  {% endif %}
+</nav>
+{% endif %}
+{% endif %}
+
+<script>
+// Multi-select submission tweak: convert each selected option to a
+// comma-separated value so the URL stays readable (?metric=cpu,mem).
+document.getElementById("graphsFilter")?.addEventListener("submit", (ev) => {
+  const form = ev.target;
+  for (const sel of form.querySelectorAll("select[data-multi]")) {
+    const picked = [...sel.selectedOptions].map(o => o.value);
+    // Strip the original name so duplicates don't show up
+    sel.disabled = true;
+    if (picked.length) {
+      const hidden = document.createElement("input");
+      hidden.type = "hidden";
+      hidden.name = sel.name;
+      hidden.value = picked.join(",");
+      form.appendChild(hidden);
+    }
+  }
+});
+</script>
+{% endblock %}

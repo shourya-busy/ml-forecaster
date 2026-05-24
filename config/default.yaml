@@ -112,3 +112,20 @@ metrics_to_forecast:
     # to find the right disk identifier label (often `family` or `chart`)
     # for a percentage formula.
     disk: 'max by (instance) (netdata_disk_space_GiB_average{dimension="used"})'
+
+# ---- AI explainer (Ollama) ----------------------------------------------
+# When enabled, the UI shows an "Explain (AI)" button on each forecast/explore
+# chart. Clicking it ships a structured summary of the chart's data to an
+# Ollama server, which returns a plain-English explanation.
+#
+# `base_url` points at any Ollama-compatible HTTP endpoint (default expects a
+# container named `ollama` on the same docker network). Override via
+# FORECASTER__AI__OLLAMA__BASE_URL or by editing this file. Set
+# `ai.enabled: false` to hide the buttons entirely.
+ai:
+  enabled: true
+  ollama:
+    base_url: "http://ollama:11434"
+    model: "llama3.2"
+    timeout_seconds: 60
+    max_points_in_prompt: 60

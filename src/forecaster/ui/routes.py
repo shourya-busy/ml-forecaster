@@ -292,65 +292,36 @@ def target_detail_page(
         effective_lookback_hours = max(0, int(lookback_hours))
 
     # ----- live forecast vs actual -----
-    # Re-fetch the actual metric values for [now - lookback_hours, forecast_end]
-    # so the user sees both the recent past *and* the forecast band on one
-    # chart. Fails open: any data-source error just skips the overlay.
+    # Overlay actuals from Prometheus for the recent past + any forecast
+    # points that have already elapsed; same helper feeds the gallery tiles
+    # and the /explore/timeseries endpoint.
     actuals_data: list[dict[str, Any]] = []
     live_mae: float | None = None
     live_count = 0
-    if forecasts_data and horizon in settings.horizons:
-        try:
-            import pandas as _pd
-            from ..data.factory import make_data_source
+    if forecasts_data:
+        from ..data.actuals import fetch_actuals_for_target
 
-            query = settings.metrics_to_forecast.queries.get(metric)
-            if query:
-                fc_first = _pd.Timestamp(forecasts_data[0]["ts"])
-                fc_last = _pd.Timestamp(forecasts_data[-1]["ts"])
-                now = _pd.Timestamp.now(tz="UTC")
-                # Pull from (now - lookback) to whichever forecast point
-                # has already occurred — that's the meaningful overlap.
-                start = min(fc_first, now - _pd.Timedelta(hours=effective_lookback_hours))
-                end = min(fc_last, now)
-                if end > start:
-                    step = settings.horizons[horizon].step
-                    ds = make_data_source(settings.data_sources)
-                    try:
-                        series_list = ds.fetch_range(
-                            query,
-                            start.to_pydatetime(),
-                            end.to_pydatetime(),
-                            step,
-                            instance_label=settings.targets.instance_label,
-                            metric_name=metric,
-                        )
-                    finally:
-                        ds.close()
-                    for s in series_list:
-                        if s.instance != instance or s.df.empty:
-                            continue
-                        snapped = s.df["value"].asfreq(_pd.Timedelta(step)).interpolate("time")
-                        actuals_data = [
-                            {"ts": idx.isoformat(), "value": _safe(float(v))}
-                            for idx, v in snapped.dropna().items()
-                        ]
-                        break
-                    # Compute MAE only over the overlap with the forecast
-                    # window (we're not scoring the past, just the future).
-                    if actuals_data:
-                        fc_map = {p["ts"]: p["point"] for p in forecasts_data}
-                        ac_map = {p["ts"]: p["value"] for p in actuals_data}
-                        common = set(fc_map.keys()) & set(ac_map.keys())
-                        diffs = [
-                            abs(fc_map[t] - ac_map[t])
-                            for t in common
-                            if fc_map[t] is not None and ac_map[t] is not None
-                        ]
-                        if diffs:
-                            live_mae = sum(diffs) / len(diffs)
-                            live_count = len(diffs)
-        except Exception as exc:  # noqa: BLE001
-            log.warning("could not fetch actuals for overlay: %s", exc)
+        actuals_data = fetch_actuals_for_target(
+            settings,
+            instance=instance,
+            metric=metric,
+            horizon=horizon,
+            lookback_hours=effective_lookback_hours,
+            forecast_first_ts=forecasts_data[0]["ts"],
+            forecast_last_ts=forecasts_data[-1]["ts"],
+        )
+        if actuals_data:
+            fc_map = {p["ts"]: p["point"] for p in forecasts_data}
+            ac_map = {p["ts"]: p["value"] for p in actuals_data}
+            common = set(fc_map.keys()) & set(ac_map.keys())
+            diffs = [
+                abs(fc_map[t] - ac_map[t])
+                for t in common
+                if fc_map[t] is not None and ac_map[t] is not None
+            ]
+            if diffs:
+                live_mae = sum(diffs) / len(diffs)
+                live_count = len(diffs)
 
     return templates.TemplateResponse(
         request, "target_detail.html",
@@ -391,6 +362,191 @@ def trigger_run(
         "ui_target_detail", instance=instance, metric=metric, horizon=horizon
     )
     return RedirectResponse(url=str(target_url), status_code=303)
+
+
+# ============================================================
+# Graphs gallery (filterable wall of forecast charts)
+# ============================================================
+
+GRAPHS_PAGE_SIZE = 60  # tiles per page; keeps a single Prometheus round-trip
+                       # per tile from snowballing on a 300-server fleet
+
+
+def _parse_csv(value: str | None) -> list[str]:
+    """Helper: '?metric=cpu&metric=mem' or '?metric=cpu,mem' → list."""
+    if not value:
+        return []
+    return [v.strip() for v in value.split(",") if v.strip()]
+
+
+@router.get("/graphs", response_class=HTMLResponse, name="ui_graphs")
+def graphs_page(
+    request: Request,
+    instance: str | None = None,
+    metric: str | None = None,
+    horizon: str | None = None,
+    lookback_hours: int = 24,
+    overlay_algos: int = 0,
+    bands: int = 1,
+    page: int = 1,
+    repo: RegistryRepo = Depends(repo_dep),
+    settings: Settings = Depends(settings_dep),
+) -> HTMLResponse:
+    """Filterable gallery — one tile per (instance, metric, horizon).
+
+    The page itself renders only the shell + filter form + tile placeholders;
+    each tile lazy-loads via HTMX so a slow Prometheus call only delays one
+    tile, not the whole page.
+    """
+    summary = repo.winners_summary(
+        recent_window=settings.exposition.diagnostics.recent_window_runs
+    )
+
+    selected_instances = set(_parse_csv(instance))
+    selected_metrics = set(_parse_csv(metric))
+    selected_horizons = set(_parse_csv(horizon))
+
+    all_instances = sorted({s["instance"] for s in summary})
+    all_metrics = sorted({s["metric"] for s in summary})
+    all_horizons = sorted({s["horizon"] for s in summary})
+
+    matched = [
+        s for s in summary
+        if (not selected_instances or s["instance"] in selected_instances)
+        and (not selected_metrics or s["metric"] in selected_metrics)
+        and (not selected_horizons or s["horizon"] in selected_horizons)
+    ]
+
+    total = len(matched)
+    page = max(1, page)
+    page_count = max(1, (total + GRAPHS_PAGE_SIZE - 1) // GRAPHS_PAGE_SIZE)
+    page = min(page, page_count)
+    start = (page - 1) * GRAPHS_PAGE_SIZE
+    visible = matched[start:start + GRAPHS_PAGE_SIZE]
+
+    return templates.TemplateResponse(
+        request, "graphs.html",
+        {
+            "active": "graphs",
+            "tiles": visible,
+            "matched_total": total,
+            "all_total": len(summary),
+            "page": page,
+            "page_count": page_count,
+            "page_size": GRAPHS_PAGE_SIZE,
+            "all_instances": all_instances,
+            "all_metrics": all_metrics,
+            "all_horizons": all_horizons,
+            "filters": {
+                "instance": sorted(selected_instances),
+                "metric": sorted(selected_metrics),
+                "horizon": sorted(selected_horizons),
+                "lookback_hours": max(0, min(720, lookback_hours)),
+                "overlay_algos": 1 if overlay_algos else 0,
+                "bands": 1 if bands else 0,
+            },
+        },
+    )
+
+
+@router.get("/_/graph-tile", response_class=HTMLResponse, name="ui_graph_tile")
+def graph_tile(
+    request: Request,
+    instance: str,
+    metric: str,
+    horizon: str,
+    lookback_hours: int = 24,
+    overlay_algos: int = 0,
+    bands: int = 1,
+    repo: RegistryRepo = Depends(repo_dep),
+    settings: Settings = Depends(settings_dep),
+) -> HTMLResponse:
+    """Single chart-tile fragment for the gallery. HTMX target.
+
+    Fetches the latest forecast (best algo + optionally all algos), overlays
+    Prometheus actuals via the shared helper, sanitizes NaN/inf, and renders
+    one card with a canvas + inline draw script.
+    """
+    from ..data.actuals import fetch_actuals_for_target
+
+    only_best = not bool(overlay_algos)
+    forecasts = repo.latest_forecasts(
+        instance=instance, metric=metric, horizon=horizon, only_best=only_best,
+    )
+    by_algo: dict[str, list[dict[str, Any]]] = {}
+    best_algo: str | None = None
+    for f in sorted(forecasts, key=lambda x: x.ts):
+        by_algo.setdefault(f.algo, []).append({
+            "ts": f.ts.isoformat(),
+            "point": _safe(f.point),
+            "lower": _safe(f.lower),
+            "upper": _safe(f.upper),
+        })
+        if f.is_best:
+            best_algo = f.algo
+
+    # If "all algos" was requested but no best flag was found (older data),
+    # fall back to the first algo by name so the band has somewhere to live.
+    if best_algo is None and by_algo:
+        best_algo = sorted(by_algo)[0]
+
+    actuals_data: list[dict[str, Any]] = []
+    best_points = by_algo.get(best_algo, []) if best_algo else []
+    if best_points:
+        actuals_data = fetch_actuals_for_target(
+            settings,
+            instance=instance,
+            metric=metric,
+            horizon=horizon,
+            lookback_hours=max(0, min(720, lookback_hours)),
+            forecast_first_ts=best_points[0]["ts"],
+            forecast_last_ts=best_points[-1]["ts"],
+        )
+
+    return templates.TemplateResponse(
+        request, "_graph_tile.html",
+        {
+            "instance": instance,
+            "metric": metric,
+            "horizon": horizon,
+            "best_algo": best_algo,
+            "by_algo": by_algo,
+            "by_algo_json": json.dumps(by_algo),
+            "algos": sorted(by_algo),
+            "actuals_json": json.dumps(actuals_data),
+            "actuals_count": len(actuals_data),
+            "show_bands": bool(bands),
+            "overlay_algos": bool(overlay_algos),
+            "display_timezone": settings.display_timezone,
+        },
+    )
+
+
+# ============================================================
+# Explore (ad-hoc PromQL query → chart)
+# ============================================================
+
+@router.get("/explore", response_class=HTMLResponse, name="ui_explore")
+def explore_page(
+    request: Request,
+    settings: Settings = Depends(settings_dep),
+) -> HTMLResponse:
+    """Interactive query page — Builder + Raw PromQL tabs.
+
+    Catalog data is fetched client-side from /explore/catalog so the page
+    shell renders instantly and the dropdowns populate even when Prometheus
+    is slow.
+    """
+    return templates.TemplateResponse(
+        request, "explore.html",
+        {
+            "active": "explore",
+            "metrics_configured": sorted(settings.metrics_to_forecast.queries.items()),
+            "horizons_configured": list(settings.horizons.keys()),
+            "instance_label": settings.targets.instance_label,
+            "display_timezone": settings.display_timezone,
+        },
+    )
 
 
 # ============================================================
@@ -1498,6 +1654,131 @@ async def manage_training_save(
 
     _invalidate()
     return RedirectResponse(url=str(request.url_for("ui_manage_training")), status_code=303)
+
+
+# ============================================================
+# Manage → AI (Ollama settings)
+# ============================================================
+
+# Dotted keys we manage from this page. Anything stored under one of these
+# is a DB override of the corresponding YAML/env value; clearing the row
+# falls back to the underlying value.
+_AI_OVERRIDE_KEYS = (
+    "ai.enabled",
+    "ai.ollama.base_url",
+    "ai.ollama.model",
+    "ai.ollama.timeout_seconds",
+    "ai.ollama.max_points_in_prompt",
+)
+
+
+@router.get("/manage/ai", response_class=HTMLResponse, name="ui_manage_ai")
+def manage_ai_page(
+    request: Request,
+    saved: int = 0,
+    repo: RegistryRepo = Depends(repo_dep),
+    settings: Settings = Depends(settings_dep),
+) -> HTMLResponse:
+    overrides_all = repo.get_all_settings_overrides()
+    override_status = {k: (k in overrides_all) for k in _AI_OVERRIDE_KEYS}
+    return templates.TemplateResponse(
+        request, "manage_ai.html",
+        {
+            "active": "manage",
+            "subnav": "ai",
+            "ai": settings.ai,
+            "ollama": settings.ai.ollama,
+            "override_status": override_status,
+            "saved": bool(saved),
+        },
+    )
+
+
+@router.post("/manage/ai/save", name="ui_manage_ai_save")
+async def manage_ai_save(
+    request: Request,
+    repo: RegistryRepo = Depends(repo_dep),
+) -> RedirectResponse:
+    form = await request.form()
+
+    def _g(key: str) -> str:
+        v = form.get(key)
+        return v if isinstance(v, str) else ""
+
+    # enabled is a checkbox: present in form ⇒ True, absent ⇒ False.
+    repo.set_settings_override("ai.enabled", _g("enabled") != "")
+
+    _set_or_delete(repo, "ai.ollama.base_url", _g("base_url"), str)
+    _set_or_delete(repo, "ai.ollama.model", _g("model"), str)
+    _set_or_delete(repo, "ai.ollama.timeout_seconds", _g("timeout_seconds"), int)
+    _set_or_delete(repo, "ai.ollama.max_points_in_prompt",
+                   _g("max_points_in_prompt"), int)
+
+    _invalidate()
+    target = str(request.url_for("ui_manage_ai")) + "?saved=1"
+    return RedirectResponse(url=target, status_code=303)
+
+
+@router.post("/manage/ai/reset", name="ui_manage_ai_reset")
+def manage_ai_reset(
+    request: Request,
+    repo: RegistryRepo = Depends(repo_dep),
+) -> RedirectResponse:
+    """Clear every AI override — fall back to YAML/env defaults."""
+    for k in _AI_OVERRIDE_KEYS:
+        repo.delete_settings_override(k)
+    _invalidate()
+    return RedirectResponse(url=str(request.url_for("ui_manage_ai")), status_code=303)
+
+
+@router.post("/manage/ai/test", response_class=HTMLResponse, name="ui_manage_ai_test")
+async def manage_ai_test(
+    request: Request,
+    settings: Settings = Depends(settings_dep),
+) -> HTMLResponse:
+    """HTMX fragment — probes Ollama with the form's draft values.
+
+    Does NOT save anything; lets the user verify a URL/model before
+    committing the change.
+    """
+    from ..ai.ollama_client import OllamaClient, OllamaError
+
+    form = await request.form()
+    base_url = (form.get("base_url") or settings.ai.ollama.base_url or "").strip()
+    if not base_url:
+        body = '<span class="pill pill-bad">no base_url</span>'
+        return HTMLResponse(body)
+
+    cfg = settings.ai.ollama.model_copy(update={"base_url": base_url})
+    client = OllamaClient(cfg)
+    ok, err = client.is_reachable()
+    if not ok:
+        body = (
+            '<span class="pill pill-bad">unreachable</span> '
+            f'<span class="sub">{err or "no response"}</span>'
+        )
+        return HTMLResponse(body)
+    try:
+        models = client.list_models()
+    except OllamaError as exc:
+        body = (
+            '<span class="pill pill-warn">reachable, but model list failed</span> '
+            f'<span class="sub">{exc}</span>'
+        )
+        return HTMLResponse(body)
+
+    if models:
+        opts = ", ".join(models[:8]) + ("…" if len(models) > 8 else "")
+        body = (
+            '<span class="pill pill-good">reachable</span> '
+            f'<span class="sub">{len(models)} model(s): {opts}</span>'
+        )
+    else:
+        body = (
+            '<span class="pill pill-warn">reachable</span> '
+            '<span class="sub">no models pulled yet — run `ollama pull` on the server</span>'
+        )
+    return HTMLResponse(body)
 
 
 # ============================================================

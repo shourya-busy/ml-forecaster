@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+{% block title %}Explore{% endblock %}
+{% block crumbs %}<span class="crumb-current">Explore</span>{% endblock %}
+{% block content %}
+
+<div class="page-header">
+  <div class="page-header-text">
+    <h1>Explore</h1>
+    <p class="subtitle">
+      Run an ad-hoc PromQL query against the configured data source and draw the result.
+      Use the <strong>Builder</strong> for guided composition, or <strong>Raw</strong> if
+      you already know what you want.
+    </p>
+  </div>
+</div>
+
+<div data-tabs class="card" style="background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-lg); padding:var(--space-4); margin-bottom:var(--space-4);">
+  <div class="tabs">
+    <button class="tab is-active" data-tab="builderTab" type="button">Builder</button>
+    <button class="tab" data-tab="rawTab" type="button">Raw PromQL</button>
+  </div>
+
+  <div id="builderTab" class="tab-panel is-active">
+    <div class="field-grid">
+      <label class="field">
+        <span class="field-label">Metric</span>
+        <select id="builderMetric">
+          <option value="">— pick a configured metric —</option>
+          {% for name, q in metrics_configured %}
+            <option value="{{ q }}" data-name="{{ name }}">{{ name }} — <span class="sub">{{ q[:80] }}{% if q|length > 80 %}…{% endif %}</span></option>
+          {% endfor %}
+          <option value="up">up (built-in: up{job="…"})</option>
+        </select>
+      </label>
+      <label class="field">
+        <span class="field-label">Instance filter (optional)</span>
+        <select id="builderInstance">
+          <option value="">— all —</option>
+          {# Populated client-side from /explore/catalog #}
+        </select>
+      </label>
+      <label class="field">
+        <span class="field-label">Aggregation</span>
+        <select id="builderAgg">
+          <option value="raw">raw (per-instance)</option>
+          <option value="avg">avg by ({{ instance_label }})</option>
+          <option value="max">max by ({{ instance_label }})</option>
+          <option value="sum">sum by ({{ instance_label }})</option>
+        </select>
+      </label>
+    </div>
+    <div style="margin-top: var(--space-3); display:flex; gap:var(--space-2);">
+      <button class="btn btn-secondary btn-sm" type="button" id="builderGenerate">↓ Generate PromQL</button>
+      <span class="sub">Fills the Raw PromQL tab. Then click Run.</span>
+    </div>
+  </div>
+
+  <div id="rawTab" class="tab-panel">
+    <label class="field">
+      <span class="field-label">PromQL / MetricsQL</span>
+      <textarea id="exploreQuery" rows="3" placeholder='e.g.  rate(node_cpu_seconds_total{mode="user"}[5m])'></textarea>
+    </label>
+  </div>
+
+  <div class="toolbar" style="margin-top: var(--space-4);">
+    <label class="field-inline">
+      <span class="sub">Range</span>
+      <select id="exploreRange">
+        <option value="1h">last 1h</option>
+        <option value="6h" selected>last 6h</option>
+        <option value="24h">last 24h</option>
+        <option value="7d">last 7d</option>
+        <option value="custom">custom…</option>
+      </select>
+    </label>
+    <label class="field-inline" data-custom-only hidden>
+      <span class="sub">Start</span>
+      <input id="exploreStart" type="datetime-local">
+    </label>
+    <label class="field-inline" data-custom-only hidden>
+      <span class="sub">End</span>
+      <input id="exploreEnd" type="datetime-local">
+    </label>
+    <label class="field-inline">
+      <span class="sub">Step</span>
+      <input id="exploreStep" type="text" value="60s" style="width:80px">
+    </label>
+    <span class="toolbar-spacer"></span>
+    <button class="btn" type="button" id="exploreRun">Run query</button>
+  </div>
+
+  <div id="exploreStatus" class="sub" style="min-height:1.2em;"></div>
+  <div id="exploreWarnings"></div>
+</div>
+
+<div class="chart-card" style="margin-top:var(--space-4);">
+  <div class="chart-card-head">
+    <h3 id="exploreChartTitle">Result</h3>
+    <span style="display:flex; gap: var(--space-2); align-items:center;">
+      <span class="sub" id="exploreSeriesCount">no query yet</span>
+      <button type="button" class="btn btn-secondary btn-sm ai-explain-btn"
+              data-ai-context-fn="fcAIContext.explore"
+              data-ai-title="Explore query">
+        Explain (AI)
+      </button>
+    </span>
+  </div>
+  <canvas id="exploreChart"></canvas>
+</div>
+
+<details style="margin-top:var(--space-4); color: var(--text-muted); font-size: 12.5px;">
+  <summary style="cursor:pointer;">Recent queries (saved locally)</summary>
+  <ul id="exploreHistory" style="margin: var(--space-3) 0 0; padding-left: var(--space-5);"></ul>
+</details>
+
+<script>
+  window.EXPLORE_CTX = {
+    metrics: {{ metrics_configured|tojson }},
+    horizons: {{ horizons_configured|tojson }},
+    instanceLabel: {{ instance_label|tojson }},
+    displayTz: {{ display_timezone|tojson }},
+  };
+</script>
+<script src="{{ url_for('ui-static', path='js/explore.js') }}" defer></script>
+{% endblock %}

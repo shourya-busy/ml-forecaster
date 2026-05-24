@@ -602,6 +602,91 @@ fieldset.fs .fs-help {
   .chart-grid-2 { grid-template-columns: 1fr; }
 }
 
+/* Gallery: auto-fit so 1-, 2-, or 3-column layouts emerge naturally
+   depending on viewport width. Min tile width keeps the canvas readable. */
+.chart-grid-3 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+  gap: var(--space-4);
+}
+.chart-tile-loading {
+  min-height: 200px;
+}
+.chart-tile canvas { max-height: 260px; }
+
+.pagination {
+  display: flex;
+  gap: var(--space-3);
+  align-items: center;
+  justify-content: center;
+  margin-top: var(--space-5);
+}
+
+/* ============================================================
+   AI explainer modal
+   ============================================================ */
+
+.ai-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.ai-modal[hidden] { display: none; }
+.ai-modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, .55);
+}
+.ai-modal-card {
+  position: relative;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+  width: min(720px, calc(100% - 32px));
+  max-height: calc(100vh - 64px);
+  display: flex;
+  flex-direction: column;
+}
+.ai-modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-4);
+  border-bottom: 1px solid var(--border);
+}
+.ai-modal-head h3 { margin: 0; }
+.ai-modal-meta {
+  padding: var(--space-2) var(--space-4) 0;
+  font-size: 12px;
+}
+.ai-modal-body {
+  padding: var(--space-4);
+  overflow-y: auto;
+  min-height: 80px;
+}
+.ai-modal-foot {
+  padding: var(--space-3) var(--space-4);
+  border-top: 1px solid var(--border);
+  display: flex;
+  justify-content: flex-end;
+}
+.ai-explanation {
+  white-space: pre-wrap;
+  line-height: 1.55;
+  font-size: 14px;
+}
+.ai-error { color: var(--danger); }
+.ai-spinner {
+  text-align: center;
+  font-size: 32px;
+  padding: var(--space-5);
+}
+.ai-explain-btn[hidden] { display: none !important; }
+
 .chart-empty {
   padding: var(--space-4);
   color: var(--text-muted);
